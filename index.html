@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="데이터센터 야간 운영 및 장애 대응 시뮬레이션 게임">
+  <title>DC OPS: NIGHT SHIFT</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <main class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>DC OPS: NIGHT SHIFT</h1>
+          <p class="subtitle">데이터센터 야간 운영 시뮬레이션</p>
+        </div>
+      </div>
+      <div class="shift-badge"><span class="pulse-dot"></span><span>NOC ONLINE · NIGHT SHIFT</span></div>
+    </header>
+
+    <section class="dashboard" aria-label="운영 현황 대시보드">
+      <article class="stat-card" style="--accent: var(--cyan)">
+        <div class="stat-label">현재 점수 · Score</div>
+        <div class="stat-value" id="score">0<span class="stat-unit">PTS</span></div>
+        <div class="stat-trend" id="scoreTrend">복구 시 +100 PTS</div>
+      </article>
+      <article class="stat-card" style="--accent: var(--green)">
+        <div class="stat-label">서비스 가용성 · Availability</div>
+        <div class="stat-value" id="availability">100.00<span class="stat-unit">%</span></div>
+        <div class="stat-trend">SLA 목표 99.90%</div>
+      </article>
+      <article class="stat-card" style="--accent: var(--yellow)">
+        <div class="stat-label">데이터센터 온도 · Temp</div>
+        <div class="stat-value" id="temperature">21.4<span class="stat-unit">°C</span></div>
+        <div class="stat-trend" id="tempTrend">냉각 시스템 정상</div>
+      </article>
+      <article class="stat-card" style="--accent: var(--red)">
+        <div class="stat-label">현재 장애 · Incidents</div>
+        <div class="stat-value" id="incidentCount">0<span class="stat-unit">OPEN</span></div>
+        <div class="stat-trend" id="incidentTrend">모든 서비스 정상</div>
+      </article>
+    </section>
+
+    <div class="main-grid">
+      <section class="rack-section">
+        <div class="section-heading">
+          <div>
+            <h2>서버 홀 · SERVER HALL A</h2>
+            <p>Rack을 선택하고 장애를 진단한 뒤 복구하세요.</p>
+          </div>
+          <div class="legend" aria-label="상태 범례">
+            <span><i style="background: var(--green)"></i>정상 Healthy</span>
+            <span><i style="background: var(--yellow)"></i>경고 Warning</span>
+            <span><i style="background: var(--red)"></i>장애 Critical</span>
+          </div>
+        </div>
+        <div class="racks" id="rackGrid"></div>
+      </section>
+
+      <aside class="side-column">
+        <section class="control-panel">
+          <div class="section-heading">
+            <div>
+              <h2>INCIDENT CONTROL</h2>
+              <p>장애 대응 콘솔</p>
+            </div>
+          </div>
+          <div class="selected-info">
+            <div><small>선택된 장비</small><span id="selectedRack">선택 없음</span></div>
+            <span id="selectedState">—</span>
+          </div>
+          <article class="ticket-panel empty" id="ticketPanel" aria-live="polite">
+            <div class="ticket-empty" id="ticketEmpty">
+              <span>INCIDENT TICKET</span>
+              <strong>NO ACTIVE TICKET</strong>
+            </div>
+            <div class="ticket-content" id="ticketContent" hidden>
+              <div class="ticket-top">
+                <span class="ticket-id" id="ticketId">TKT-0000</span>
+                <span class="ticket-severity" id="ticketSeverity">Critical</span>
+              </div>
+              <h3 id="ticketTitle">Incident Title</h3>
+              <div class="ticket-summary">
+                <div><small>AFFECTED RACK</small><strong id="ticketRack">—</strong></div>
+                <div><small>SLA REMAINING</small><strong class="sla-time" id="ticketSla">00:00</strong></div>
+              </div>
+              <dl class="ticket-details">
+                <div><dt>증상 · SYMPTOM</dt><dd id="ticketSymptom">—</dd></div>
+                <div class="diagnosis-result" id="ticketDiagnosis" hidden>
+                  <dt>진단 · DIAGNOSIS</dt><dd id="ticketDiagnosisText">—</dd>
+                  <dt>원인 · ROOT CAUSE</dt><dd id="ticketRootCause">—</dd>
+                  <dt>조치 · CORRECT ACTION</dt><dd id="ticketAction">—</dd>
+                </div>
+              </dl>
+            </div>
+          </article>
+          <div class="buttons">
+            <button class="action-btn incident" id="incidentBtn" type="button">⚠ 장애 발생 · TRIGGER INCIDENT</button>
+            <button class="action-btn diagnose" id="diagnoseBtn" type="button">진단 · DIAGNOSE</button>
+            <button class="action-btn recover" id="recoverBtn" type="button">복구 · RECOVER</button>
+          </div>
+          <p class="hint">운영 절차: Critical Rack 선택 → 진단 → 복구</p>
+        </section>
+
+        <section class="log-panel">
+          <div class="log-header"><h2>EVENT LOG</h2><span class="live">● LIVE</span></div>
+          <ol class="log-list" id="eventLog" aria-live="polite"></ol>
+        </section>
+      </aside>
+    </div>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="incidents.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
