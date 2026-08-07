@@ -230,6 +230,7 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .queue-item.breached { border-color: rgba(255, 77, 103, 0.72); background: rgba(255, 77, 103, 0.08); }
 .queue-ticket strong, .queue-sla { display: block; font: 700 0.64rem ui-monospace, SFMono-Regular, Consolas, monospace; }
 .queue-ticket small { color: var(--muted); font-size: 0.52rem; }
+.queue-ticket small { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; margin-top: 2px; }
 .queue-severity, .queue-stage { font-size: 0.55rem; font-weight: 800; }
 .queue-severity { color: var(--red); }
 .queue-stage { color: var(--yellow); text-transform: uppercase; }
@@ -356,7 +357,15 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .ticket-empty { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--muted); font-size: 0.57rem; letter-spacing: 0.08em; }
 .ticket-empty strong { color: #60768a; font-size: 0.63rem; }
 .ticket-top { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.ticket-identity { display: flex; min-width: 0; align-items: center; gap: 7px; }
 .ticket-id { color: var(--cyan); font: 700 0.65rem ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.06em; }
+.ticket-category,
+.queue-category { display: inline-flex; align-items: center; width: max-content; padding: 2px 5px; border: 1px solid rgba(76, 141, 255, 0.42); border-radius: 4px; color: #8ab7ff; background: rgba(76, 141, 255, 0.09); font: 800 0.48rem ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.04em; }
+.ticket-category.category-server, .queue-category.category-server { border-color: rgba(38, 217, 255, 0.38); color: #86ebff; background: rgba(38, 217, 255, 0.08); }
+.ticket-category.category-storage, .queue-category.category-storage { border-color: rgba(255, 200, 87, 0.42); color: #ffda8f; background: rgba(255, 200, 87, 0.08); }
+.ticket-category.category-network, .queue-category.category-network { border-color: rgba(76, 141, 255, 0.46); color: #9bbfff; background: rgba(76, 141, 255, 0.09); }
+.ticket-category.category-power, .queue-category.category-power { border-color: rgba(255, 125, 77, 0.45); color: #ffb197; background: rgba(255, 125, 77, 0.09); }
+.ticket-category.category-cooling, .queue-category.category-cooling { border-color: rgba(66, 227, 164, 0.42); color: #8af0c5; background: rgba(66, 227, 164, 0.08); }
 .ticket-severity { padding: 3px 7px; border: 1px solid rgba(255, 77, 103, 0.45); border-radius: 999px; color: #ff9bad; background: rgba(255, 77, 103, 0.1); font-size: 0.55rem; font-weight: 800; text-transform: uppercase; }
 .ticket-content h3 { margin: 10px 0; color: #f7c4cc; font-size: 0.8rem; line-height: 1.35; }
 .ticket-summary { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }

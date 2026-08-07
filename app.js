@@ -1,7 +1,7 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.6 설정 ----------------
+  // ---------------- v0.7 설정 ----------------
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -22,6 +22,7 @@
   const DIFFICULTY_CONFIG = Object.freeze({
     EASY: Object.freeze({
       label: "EASY",
+      rank: 1,
       autoIncidentMinMs: testAutoMinMs ?? 20000,
       autoIncidentMaxMs: testAutoMaxMs ?? 35000,
       slaMultiplier: 1.25,
@@ -32,6 +33,7 @@
     }),
     NORMAL: Object.freeze({
       label: "NORMAL",
+      rank: 2,
       autoIncidentMinMs: testAutoMinMs ?? 15000,
       autoIncidentMaxMs: testAutoMaxMs ?? 30000,
       slaMultiplier: 1,
@@ -42,6 +44,7 @@
     }),
     HARD: Object.freeze({
       label: "HARD",
+      rank: 3,
       autoIncidentMinMs: testAutoMinMs ?? 10000,
       autoIncidentMaxMs: testAutoMaxMs ?? 22000,
       slaMultiplier: 0.8,
@@ -138,6 +141,7 @@
     temperature: 21.4,
     selectedId: null,
     ticketSequence: 0,
+    lastIncidentId: null,
     incidentHistory: [],
     selectedDifficulty: "NORMAL",
     stats: createEmptyStats(),
@@ -169,6 +173,7 @@
     ticketEmpty: document.querySelector("#ticketEmpty"),
     ticketContent: document.querySelector("#ticketContent"),
     ticketId: document.querySelector("#ticketId"),
+    ticketCategory: document.querySelector("#ticketCategory"),
     ticketSeverity: document.querySelector("#ticketSeverity"),
     ticketTitle: document.querySelector("#ticketTitle"),
     ticketRack: document.querySelector("#ticketRack"),
@@ -253,6 +258,14 @@
     return DIFFICULTY_CONFIG[key] ?? DIFFICULTY_CONFIG.NORMAL;
   }
 
+  function getAvailableIncidents(difficultyKey = getCurrentDifficultyKey()) {
+    const selectedRank = getDifficultyConfig(difficultyKey).rank;
+    return INCIDENTS.filter((incident) => {
+      const minimumRank = DIFFICULTY_CONFIG[incident.minDifficulty]?.rank;
+      return Number.isFinite(minimumRank) && minimumRank <= selectedRank;
+    });
+  }
+
   function calculateRequiredEvidence(usefulCommands) {
     const uniqueCommands = new Set(Array.isArray(usefulCommands) ? usefulCommands : []);
     if (uniqueCommands.size === 0) return 0;
@@ -294,7 +307,10 @@
     const usedLabels = new Set([normalize(correctLabel)]);
     const distractors = [];
 
-    shuffle(INCIDENTS).forEach((incident) => {
+    const sameCategory = INCIDENTS.filter((incident) => incident?.category === ticket.category);
+    const otherCategories = INCIDENTS.filter((incident) => incident?.category !== ticket.category);
+
+    [...shuffle(sameCategory), ...shuffle(otherCategories)].forEach((incident) => {
       if (!incident || incident.incidentId === ticket.incidentId || distractors.length >= 2) return;
       const label = String(incident[valueKey] ?? "").trim();
       const normalized = normalize(label);
@@ -340,22 +356,33 @@
 SYSTEM
   hostname
   uptime
+  dmesg
 
 RESOURCES
   top
   free -m
+
+STORAGE
   df -h
+  iostat
+  mount
 
 NETWORK
   ping [host]
   curl [url]
+  nslookup [host]
+  cat /etc/resolv.conf
   ss -lntp
   ip addr
+  ethtool eth0
   traceroute [host]
 
 SERVICE
   systemctl status nginx
   journalctl -u nginx
+
+HARDWARE
+  ipmitool sensor
 
 TERMINAL
   help
@@ -366,9 +393,15 @@ TERMINAL
     "clear",
     "hostname",
     "uptime",
+    "dmesg",
     "df -h",
+    "iostat",
+    "mount",
     "free -m",
     "top",
+    "cat /etc/resolv.conf",
+    "ethtool eth0",
+    "ipmitool sensor",
     "systemctl status nginx",
     "journalctl -u nginx",
     "ss -lntp",
@@ -394,6 +427,9 @@ TERMINAL
     if (normalized === "traceroute" || normalized.startsWith("traceroute ")) {
       return { normalized, canonical: "traceroute" };
     }
+    if (normalized === "nslookup" || normalized.startsWith("nslookup ")) {
+      return { normalized, canonical: "nslookup" };
+    }
     return { normalized, canonical: null };
   }
 
@@ -406,6 +442,7 @@ TERMINAL
     help: () => HELP_OUTPUT,
     hostname: (rack) => `rack${String(rack.id).padStart(2, "0")}.dc-ops.local`,
     uptime: (rack) => `22:${String(10 + rack.id).padStart(2, "0")}:08 up 47 days, 4:${rack.id}2, 1 user, load average: 0.${rack.id}8, 0.42, 0.31`,
+    dmesg: () => `[    0.000000] Linux version 6.8.0-dcops\n[    1.842117] EXT4-fs (sda1): mounted filesystem with ordered data mode\n[    3.103824] eth0: Link is Up - 1000Mbps/Full\n[ 4821.445210] system health check: no recent critical hardware errors`,
     "df -h": (rack) => {
       const percent = rack.metrics.Disk;
       const used = Math.round(50 * percent / 100);
@@ -417,6 +454,8 @@ TERMINAL
       const free = total - used;
       return `              total        used        free      shared  buff/cache   available\nMem:           ${total}        ${used}        ${free}         128        1024        ${Math.max(0, free + 512)}\nSwap:          2048         128        1920`;
     },
+    iostat: () => `Linux 6.8.0-dcops\n\navg-cpu:  %user  %system  %iowait  %idle\n           8.20     2.10      0.60  89.10\n\nDevice  r/s   w/s  await  %util\nsda     8.4  12.1   1.84   7.20`,
+    mount: () => `/dev/sda1 on / type ext4 (rw,relatime,errors=remount-ro)\n/dev/sdb1 on /data type ext4 (rw,relatime)`,
     top: (rack) => {
       const busy = Math.min(96, rack.metrics.CPU);
       const idle = Math.max(4, 100 - busy);
@@ -426,6 +465,9 @@ TERMINAL
     "journalctl -u nginx": () => `Aug 08 22:00:08 systemd[1]: Started A high performance web server.\nAug 08 22:00:08 nginx[938]: configuration file /etc/nginx/nginx.conf test is successful\n-- No recent errors --`,
     "ss -lntp": () => `State   Recv-Q  Send-Q   Local Address:Port   Process\nLISTEN  0       511      0.0.0.0:80          users:((\"nginx\",pid=938,fd=6))\nLISTEN  0       128      0.0.0.0:22          users:((\"sshd\",pid=721,fd=3))`,
     "ip addr": (rack) => `2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 10.20.${rack.id}.15/24 brd 10.20.${rack.id}.255 scope global eth0\n    link/ether 02:42:ac:14:0${rack.id}:0f`,
+    "cat /etc/resolv.conf": () => `search dc-ops.local\nnameserver 10.20.0.53\noptions timeout:2 attempts:2`,
+    "ethtool eth0": () => `Settings for eth0:\n\tSpeed: 1000Mb/s\n\tDuplex: Full\n\tLink detected: yes\nNIC statistics:\n\trx_errors: 0\n\ttx_errors: 0\n\trx_dropped: 0`,
+    "ipmitool sensor": () => `PSU1 Status      | 0x01 | ok\nPSU2 Status      | 0x01 | ok\nFan1 RPM         | 7200 | ok\nFan2 RPM         | 7100 | ok\nInlet Temp       | 22.4 | degrees C | ok\nSystem Voltage   | 230  | Volts | ok`,
     ping: (rack, command) => {
       const target = terminalTarget(command, `10.20.${rack.id}.1`);
       return `PING ${target} (${target}) 56(84) bytes of data.\n64 bytes from ${target}: icmp_seq=1 ttl=63 time=0.${rack.id}8 ms\n64 bytes from ${target}: icmp_seq=2 ttl=63 time=0.${rack.id + 2}1 ms\n--- ${target} ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss`;
@@ -433,6 +475,10 @@ TERMINAL
     curl: (_rack, command) => {
       const target = terminalTarget(command, "localhost");
       return `HTTP/1.1 200 OK\nServer: nginx/1.24.0\nContent-Type: text/html\nX-Simulated-Target: ${target}\n\nDC OPS service healthy`;
+    },
+    nslookup: (_rack, command) => {
+      const target = terminalTarget(command, "api.dc-ops.local");
+      return `Server:         10.20.0.53\nAddress:        10.20.0.53#53\n\nName:   ${target}\nAddress: 10.20.10.25`;
     },
     traceroute: (rack, command) => {
       const target = terminalTarget(command, `10.20.${rack.id}.1`);
@@ -648,6 +694,8 @@ TERMINAL
     elements.ticketEmpty.hidden = true;
     elements.ticketContent.hidden = false;
     elements.ticketId.textContent = ticket.ticketId;
+    elements.ticketCategory.textContent = ticket.category;
+    elements.ticketCategory.className = `ticket-category category-${ticket.category.toLowerCase()}`;
     elements.ticketSeverity.textContent = ticket.severity;
     elements.ticketTitle.textContent = diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
     elements.ticketRack.textContent = ticket.affectedRack;
@@ -746,7 +794,7 @@ TERMINAL
       const breached = ticket.slaBreached;
       const urgent = !breached && remaining <= 10;
       return `<button class="queue-item${breached ? " breached" : urgent ? " urgent" : ""}${game.selectedId === rack.id ? " selected" : ""}" type="button" data-queue-rack-id="${rack.id}">
-        <span class="queue-ticket"><strong>${ticket.ticketId}</strong><small>${rackLabel(rack.id)}</small></span>
+        <span class="queue-ticket"><strong>${ticket.ticketId}</strong><small>${rackLabel(rack.id)} <span class="queue-category category-${ticket.category.toLowerCase()}">${ticket.category}</span></small></span>
         <span class="queue-severity">${severityInfo(ticket.severity).label}</span>
         <span class="queue-stage">${getStageLabel(ticket.stage)}</span>
         <span class="queue-sla">${breached ? "BREACH" : formatClock(remaining)}</span>
@@ -829,12 +877,23 @@ TERMINAL
       return false;
     }
 
+    const difficultyKey = getCurrentDifficultyKey();
+    const availableIncidents = getAvailableIncidents(difficultyKey);
+    if (!availableIncidents.length) {
+      showToast(`${difficultyKey} 난이도에서 사용 가능한 Incident가 없습니다.`, "error");
+      addLog("WARNING", `Incident 생성 실패 - ${difficultyKey} Pool 비어 있음`);
+      return false;
+    }
+
+    const repeatSafePool = availableIncidents.length > 1
+      ? availableIncidents.filter((incident) => incident.incidentId !== game.lastIncidentId)
+      : availableIncidents;
     const rack = candidates[Math.floor(Math.random() * candidates.length)];
-    const incident = INCIDENTS[Math.floor(Math.random() * INCIDENTS.length)];
+    const incident = repeatSafePool[Math.floor(Math.random() * repeatSafePool.length)];
+    game.lastIncidentId = incident.incidentId;
     const ticketId = `TKT-${String(++game.ticketSequence).padStart(4, "0")}`;
     const createdAt = Date.now();
     const countedInShift = game.shift.status === "RUNNING";
-    const difficultyKey = getCurrentDifficultyKey();
     const difficulty = getDifficultyConfig(difficultyKey);
     const appliedSlaSeconds = Math.max(1, Math.round(incident.slaSeconds * difficulty.slaMultiplier));
     const rewardScore = Math.max(0, Math.round(incident.score * difficulty.scoreMultiplier));
@@ -1100,6 +1159,7 @@ TERMINAL
     game.temperature = 21.4;
     game.selectedId = null;
     game.ticketSequence = 0;
+    game.lastIncidentId = null;
     game.incidentHistory = [];
     game.stats = createEmptyStats();
     if (resetDifficulty) game.selectedDifficulty = "NORMAL";
