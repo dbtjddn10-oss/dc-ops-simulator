@@ -1,13 +1,13 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
 최종 업데이트: 2026-08-07  
-현재 버전: **v0.3 — Diagnosis & Action System**
+현재 버전: **v0.3.1 — Stability Update**
 
 외부 라이브러리나 설치 과정 없이 `index.html`을 브라우저에서 실행할 수 있는 데이터센터 야간 운영 시뮬레이션 프로토타입이다.
 
 ## 1. 현재 버전
 
-**v0.3 — Diagnosis & Action System**
+**v0.3.1 — Stability Update**
 
 ## 2. 지금까지 구현된 기능
 
@@ -66,6 +66,15 @@
 - 각 Ticket에 후보 순서, 진행 단계와 오답 기록을 저장하여 Rack 전환 후에도 상태 유지
 - 진단 전 복구 감점은 Ticket당 한 번만 적용
 
+### v0.3.1 안정화
+
+- Incident 발생 직전 Rack의 상태와 metrics를 Ticket에 복사해 저장
+- Incident 해결 시 무조건 Healthy로 만들지 않고 이전 상태와 수치를 정확히 복원
+- `rack.diagnosed`를 제거하고 `ticket.stage`를 진행 상태의 단일 기준으로 사용
+- 후보 label의 공백과 대소문자를 정규화하여 중복 선택지 차단
+- Incident가 1개 또는 2개뿐인 경우에도 가능한 고유 후보만 안전하게 생성
+- 올바른 후보는 항상 한 개만 포함되도록 방어 처리
+
 ## 3. 프로젝트 파일 구조와 각 파일의 역할
 
 ```text
@@ -97,7 +106,6 @@ Rack과 게임 상태를 관리하고 랜덤 Incident 생성, 후보 생성, Dia
 
 ### 현재 규칙상 발생 가능한 문제
 
-- 초기 Warning 상태인 Rack 05에 Incident가 발생한 뒤 복구하면 기존 Warning이 보존되지 않고 Healthy로 변경된다.
 - 여러 Incident가 열려 있어도 Ticket 패널에는 현재 선택한 Rack의 Ticket 하나만 표시된다.
 - 현재 Incident가 5개뿐이므로 게임을 반복하면 Diagnosis와 Action 오답 패턴을 쉽게 암기할 수 있다.
 - 오답을 종류별로 한 번씩 선택할 수 있으므로 한 Ticket에서 Diagnosis 최대 20점, Action 최대 40점까지 감점될 수 있다.
@@ -121,6 +129,10 @@ Rack과 게임 상태를 관리하고 랜덤 Incident 생성, 후보 생성, Dia
 - 실제 제목과 Root Cause가 정답 Diagnosis 전에는 화면에 노출되지 않음
 - Diagnosis와 Action 후보가 각각 정답 1개와 다른 Incident 기반 오답 2개로 구성됨
 - 선택한 오답 비활성화 및 Rack 전환 후 진행 상태 유지
+- Warning Rack의 이전 상태와 metrics 복원 확인
+- SLA Timer 감소 및 다중 Incident 6개 동시 유지 확인
+- 진단 전 복구 감점이 Ticket당 한 번만 적용됨을 확인
+- 브라우저 콘솔 오류 없음
 
 ## 5. 아직 구현하지 않은 기능
 
@@ -152,18 +164,17 @@ Rack과 게임 상태를 관리하고 랜덤 Incident 생성, 후보 생성, Dia
 
 ## 7. 가장 최근 작업에서 변경된 내용
 
-최근 작업에서 프로젝트를 v0.3 Diagnosis & Action System으로 확장했다.
+최근 작업에서 프로젝트를 v0.3.1 Stability Update로 안정화했다.
 
-- Incident 발생 직후 정답 정보가 Ticket, Toast와 Alert 로그에 노출되던 구조 수정
-- Diagnosis 후보 3개와 Action 후보 3개를 무작위 순서로 생성
-- 다른 Incident 2개의 정답 데이터를 그럴듯한 오답으로 사용
-- 오답 Diagnosis `-10점`, 오답 Action `-20점` 규칙 추가
-- `DIAG`, `WRONG DIAG`, `DIAG OK`, `WRONG ACTION`, `RECOVERY` 로그 추가
-- 선택한 오답을 비활성화하고 중복 감점을 차단
-- Ticket별 `reported → diagnosis → action` 진행 단계 저장
-- Rack 전환 시 후보 순서, 진단 단계와 선택한 오답 상태 유지
-- 올바른 Action을 선택해야만 복구되도록 자동 복구 제거
-- 기존 진단 전 복구 30점 감점을 Ticket당 한 번으로 제한
-- NOC 디자인에 맞는 Decision Panel과 반응형 후보 버튼 추가
+- Incident 적용 전에 `previousStatus`와 `previousMetrics` 저장
+- 복구 시 저장된 Rack 상태와 metrics 복원
+- Warning Rack이 복구 후에도 Warning으로 돌아오도록 수정
+- `rack.diagnosed` 상태 제거
+- `ticket.stage`를 `reported → diagnosis → action` 진행 상태의 단일 기준으로 통합
+- Diagnosis/Action UI, 복구 판정과 Rack 표시가 모두 같은 `ticket.stage`를 참조하도록 정리
+- `createChoiceOptions()`에 정답 label 확인과 중복 label 제거 로직 추가
+- Incident 1개, 2개, 중복 label 데이터에 대한 후보 생성 방어 처리
+- 5개 Incident에서는 기존과 동일하게 고유 후보 3개와 정답 1개 생성 확인
+- 브라우저에서 다중 Incident, SLA, 오답 감점, 중복 차단, Rack 전환, 복구와 1회 감점 검증
 
-기존 랜덤 Incident, Rack 6개, 다중 Incident, SLA, 대시보드, 온도 계산, Event Log와 반응형 UI는 유지했다.
+기존 랜덤 Incident, Diagnosis & Action System, 다중 Incident, SLA, 점수, 대시보드, Event Log와 반응형 UI는 그대로 유지했다.

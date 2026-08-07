@@ -13,7 +13,6 @@
   const racks = Array.from({ length: 6 }, (_, index) => ({
     id: index + 1,
     status: index === 4 ? "warning" : "healthy",
-    diagnosed: false,
     ticket: null,
     metrics: createNormalMetrics(index === 4)
   }));
@@ -105,15 +104,36 @@
   }
 
   function createChoiceOptions(ticket, valueKey) {
-    const distractors = shuffle(
-      INCIDENTS.filter((incident) => incident.incidentId !== ticket.incidentId)
-    ).slice(0, 2);
+    const correctLabel = String(ticket?.[valueKey] ?? "").trim();
+    if (!correctLabel) return [];
 
-    return shuffle([ticket, ...distractors]).map((incident) => ({
-      optionId: `${valueKey}-${incident.incidentId}`,
-      label: incident[valueKey],
-      isCorrect: incident.incidentId === ticket.incidentId
-    }));
+    const normalizeLabel = (label) => String(label).trim().replaceAll(/\s+/g, " ").toLowerCase();
+    const usedLabels = new Set([normalizeLabel(correctLabel)]);
+    const distractors = [];
+
+    shuffle(INCIDENTS).forEach((incident) => {
+      if (!incident || incident.incidentId === ticket.incidentId || distractors.length >= 2) return;
+
+      const label = String(incident?.[valueKey] ?? "").trim();
+      const normalizedLabel = normalizeLabel(label);
+      if (!label || usedLabels.has(normalizedLabel)) return;
+
+      usedLabels.add(normalizedLabel);
+      distractors.push({
+        optionId: `${valueKey}-${incident.incidentId}`,
+        label,
+        isCorrect: false
+      });
+    });
+
+    return shuffle([
+      {
+        optionId: `${valueKey}-${ticket.incidentId}`,
+        label: correctLabel,
+        isCorrect: true
+      },
+      ...distractors
+    ]);
   }
 
   // ---------------- 화면 그리기 ----------------
@@ -122,7 +142,7 @@
       const info = STATUS_INFO[rack.status];
       const incident = getIncident(rack);
       const selected = game.selectedId === rack.id ? "selected" : "";
-      const diagnosed = rack.diagnosed ? "diagnosed" : "";
+      const diagnosed = incident?.stage === "action" ? "diagnosed" : "";
       const metricHtml = Object.entries(rack.metrics).map(([name, value]) => {
         const isLowCritical = rack.status === "critical" && name === "Network" && value <= 10;
         const level = isLowCritical ? "high low" : value >= 85 ? "high" : value >= 70 ? "medium" : "";
@@ -199,18 +219,19 @@
     }
 
     const slaRemaining = getSlaRemaining(ticket);
+    const diagnosed = ticket.stage === "action";
     elements.ticketPanel.className = `ticket-panel${slaRemaining === 0 ? " sla-breached" : ""}`;
     elements.ticketEmpty.hidden = true;
     elements.ticketContent.hidden = false;
     elements.ticketId.textContent = ticket.ticketId;
     elements.ticketSeverity.textContent = ticket.severity;
-    elements.ticketTitle.textContent = rack.diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
+    elements.ticketTitle.textContent = diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
     elements.ticketRack.textContent = ticket.affectedRack;
     elements.ticketSla.textContent = formatSla(slaRemaining);
     elements.ticketSymptom.textContent = ticket.symptom;
-    elements.ticketDiagnosis.hidden = !rack.diagnosed;
-    elements.ticketDiagnosisText.textContent = rack.diagnosed ? ticket.correctDiagnosis : "—";
-    elements.ticketRootCause.textContent = rack.diagnosed ? ticket.rootCause : "—";
+    elements.ticketDiagnosis.hidden = !diagnosed;
+    elements.ticketDiagnosisText.textContent = diagnosed ? ticket.correctDiagnosis : "—";
+    elements.ticketRootCause.textContent = diagnosed ? ticket.rootCause : "—";
   }
 
   function updateDecisionPanel() {
@@ -289,9 +310,10 @@
     const incident = INCIDENTS[Math.floor(Math.random() * INCIDENTS.length)];
     const ticketId = `TKT-${String(++game.ticketSequence).padStart(4, "0")}`;
     const createdAt = Date.now();
+    const previousStatus = rack.status;
+    const previousMetrics = { ...rack.metrics };
 
     rack.status = "critical";
-    rack.diagnosed = false;
     rack.ticket = {
       ...incident,
       affectedRack: rackLabel(rack.id),
@@ -304,7 +326,9 @@
       actionOptions: null,
       wrongDiagnoses: [],
       wrongActions: [],
-      prematureRecoveryPenalized: false
+      prematureRecoveryPenalized: false,
+      previousStatus,
+      previousMetrics
     };
     rack.metrics = {
       CPU: incident.cpu,
@@ -379,7 +403,7 @@
       addLog("WARNING", `${rackLabel(rack.id)} 복구 실패 - Ticket 데이터 없음`);
       return;
     }
-    if (!rack.diagnosed) {
+    if (rack.ticket.stage !== "action") {
       if (!rack.ticket.prematureRecoveryPenalized) {
         rack.ticket.prematureRecoveryPenalized = true;
         game.score -= 30;
@@ -399,10 +423,11 @@
 
   function resolveIncident(rack) {
     const resolvedTicket = rack.ticket;
-    rack.status = "healthy";
-    rack.diagnosed = false;
+    rack.status = resolvedTicket.previousStatus ?? "healthy";
     rack.ticket = null;
-    rack.metrics = createNormalMetrics();
+    rack.metrics = resolvedTicket.previousMetrics
+      ? { ...resolvedTicket.previousMetrics }
+      : createNormalMetrics();
     game.score += resolvedTicket.score;
     game.availability = Math.min(100, game.availability + 0.85);
     recalculateTemperature();
@@ -445,7 +470,6 @@
     }
 
     if (isDiagnosis) {
-      rack.diagnosed = true;
       ticket.stage = "action";
       ticket.actionOptions = createChoiceOptions(ticket, "correctAction");
       addLog("DIAG OK", ticket.correctDiagnosis);
