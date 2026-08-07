@@ -1,7 +1,7 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.5 설정 ----------------
+  // ---------------- v0.6 설정 ----------------
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -12,9 +12,44 @@
   const SHIFT_CONFIG = Object.freeze({
     durationSeconds: testNumber("shiftSeconds", 180),
     simulatedStartMinutes: 22 * 60,
-    simulatedDurationMinutes: 8 * 60,
-    autoIncidentMinMs: testNumber("autoMinMs", 15000),
-    autoIncidentMaxMs: testNumber("autoMaxMs", 30000)
+    simulatedDurationMinutes: 8 * 60
+  });
+
+  const testAutoMinMs = query.has("autoMinMs") ? testNumber("autoMinMs", 15000) : null;
+  const testAutoMaxMs = query.has("autoMaxMs") ? testNumber("autoMaxMs", 30000) : null;
+
+  // 난이도 밸런스 숫자는 이 객체 한 곳에서 조정합니다.
+  const DIFFICULTY_CONFIG = Object.freeze({
+    EASY: Object.freeze({
+      label: "EASY",
+      autoIncidentMinMs: testAutoMinMs ?? 20000,
+      autoIncidentMaxMs: testAutoMaxMs ?? 35000,
+      slaMultiplier: 1.25,
+      scoreMultiplier: 0.85,
+      investigationRequired: false,
+      showInvestigationHint: true,
+      investigationGradePenaltyMax: 0
+    }),
+    NORMAL: Object.freeze({
+      label: "NORMAL",
+      autoIncidentMinMs: testAutoMinMs ?? 15000,
+      autoIncidentMaxMs: testAutoMaxMs ?? 30000,
+      slaMultiplier: 1,
+      scoreMultiplier: 1,
+      investigationRequired: false,
+      showInvestigationHint: false,
+      investigationGradePenaltyMax: 0
+    }),
+    HARD: Object.freeze({
+      label: "HARD",
+      autoIncidentMinMs: testAutoMinMs ?? 10000,
+      autoIncidentMaxMs: testAutoMaxMs ?? 22000,
+      slaMultiplier: 0.8,
+      scoreMultiplier: 1.25,
+      investigationRequired: true,
+      showInvestigationHint: false,
+      investigationGradePenaltyMax: 10
+    })
   });
 
   // Incident가 늘어날 때 P1~P4 또는 기존 문자열을 여기에 추가하면 Queue 정렬에 반영됩니다.
@@ -104,9 +139,11 @@
     selectedId: null,
     ticketSequence: 0,
     incidentHistory: [],
+    selectedDifficulty: "NORMAL",
     stats: createEmptyStats(),
     shift: {
       status: "IDLE",
+      difficulty: null,
       startedAt: null,
       endsAt: null,
       remainingSeconds: SHIFT_CONFIG.durationSeconds,
@@ -137,6 +174,12 @@
     ticketRack: document.querySelector("#ticketRack"),
     ticketSla: document.querySelector("#ticketSla"),
     ticketSymptom: document.querySelector("#ticketSymptom"),
+    ticketHint: document.querySelector("#ticketHint"),
+    investigationProgress: document.querySelector("#investigationProgress"),
+    investigationCurrent: document.querySelector("#investigationCurrent"),
+    investigationRequired: document.querySelector("#investigationRequired"),
+    investigationBar: document.querySelector("#investigationBar"),
+    investigationState: document.querySelector("#investigationState"),
     ticketDiagnosis: document.querySelector("#ticketDiagnosis"),
     ticketDiagnosisText: document.querySelector("#ticketDiagnosisText"),
     ticketRootCause: document.querySelector("#ticketRootCause"),
@@ -149,10 +192,14 @@
     incidentBtn: document.querySelector("#incidentBtn"),
     diagnoseBtn: document.querySelector("#diagnoseBtn"),
     recoverBtn: document.querySelector("#recoverBtn"),
+    diagnosisGateMessage: document.querySelector("#diagnosisGateMessage"),
     shiftStatus: document.querySelector("#shiftStatus"),
     shiftGameTime: document.querySelector("#shiftGameTime"),
     shiftRemaining: document.querySelector("#shiftRemaining"),
     shiftSlaBreaches: document.querySelector("#shiftSlaBreaches"),
+    currentDifficulty: document.querySelector("#currentDifficulty"),
+    difficultySelector: document.querySelector("#difficultySelector"),
+    difficultySummary: document.querySelector("#difficultySummary"),
     startShiftBtn: document.querySelector("#startShiftBtn"),
     endShiftBtn: document.querySelector("#endShiftBtn"),
     endShiftConfirmModal: document.querySelector("#endShiftConfirmModal"),
@@ -175,6 +222,8 @@
     reportCommands: document.querySelector("#reportCommands"),
     reportUsefulCommands: document.querySelector("#reportUsefulCommands"),
     reportInvalidCommands: document.querySelector("#reportInvalidCommands"),
+    reportDifficulty: document.querySelector("#reportDifficulty"),
+    reportInvestigationCoverage: document.querySelector("#reportInvestigationCoverage"),
     terminalRackLabel: document.querySelector("#terminalRackLabel"),
     terminalSensor: document.querySelector("#terminalSensor"),
     terminalOutput: document.querySelector("#terminalOutput"),
@@ -194,6 +243,29 @@
 
   function getIncident(rack) {
     return rack.ticket;
+  }
+
+  function getCurrentDifficultyKey() {
+    return game.shift.difficulty ?? game.selectedDifficulty;
+  }
+
+  function getDifficultyConfig(key = getCurrentDifficultyKey()) {
+    return DIFFICULTY_CONFIG[key] ?? DIFFICULTY_CONFIG.NORMAL;
+  }
+
+  function calculateRequiredEvidence(usefulCommands) {
+    const uniqueCommands = new Set(Array.isArray(usefulCommands) ? usefulCommands : []);
+    if (uniqueCommands.size === 0) return 0;
+    return Math.min(2, uniqueCommands.size);
+  }
+
+  function getEvidenceCount(ticket) {
+    return new Set(ticket?.countedUsefulCommands ?? []).size;
+  }
+
+  function hasRequiredEvidence(ticket) {
+    if (!ticket?.investigationRequired) return true;
+    return getEvidenceCount(ticket) >= ticket.requiredEvidenceCount;
   }
 
   function escapeHtml(value) {
@@ -497,6 +569,8 @@ TERMINAL
       useful,
       executedAt: Date.now()
     });
+    updateTicketPanel();
+    updateActionControls();
     renderTerminal();
   }
 
@@ -563,6 +637,8 @@ TERMINAL
       elements.ticketPanel.className = "ticket-panel empty";
       elements.ticketEmpty.hidden = false;
       elements.ticketContent.hidden = true;
+      elements.ticketHint.hidden = true;
+      elements.investigationProgress.hidden = true;
       return;
     }
 
@@ -577,6 +653,23 @@ TERMINAL
     elements.ticketRack.textContent = ticket.affectedRack;
     elements.ticketSla.textContent = ticket.slaBreached ? "BREACH" : formatClock(remaining);
     elements.ticketSymptom.textContent = ticket.symptom;
+    const ticketDifficulty = getDifficultyConfig(ticket.difficulty);
+    const showHint = ticketDifficulty.showInvestigationHint && Boolean(ticket.investigationHint);
+    elements.ticketHint.hidden = !showHint;
+    elements.ticketHint.textContent = showHint ? `INVESTIGATION HINT · ${ticket.investigationHint}` : "";
+
+    const evidenceCount = getEvidenceCount(ticket);
+    const evidenceAvailable = hasRequiredEvidence(ticket);
+    elements.investigationProgress.hidden = !ticket.investigationRequired;
+    elements.investigationProgress.className = `investigation-progress${evidenceAvailable ? " available" : ""}`;
+    elements.investigationCurrent.textContent = Math.min(evidenceCount, ticket.requiredEvidenceCount);
+    elements.investigationRequired.textContent = ticket.requiredEvidenceCount;
+    elements.investigationBar.style.width = `${ticket.requiredEvidenceCount
+      ? Math.min(100, evidenceCount / ticket.requiredEvidenceCount * 100)
+      : 100}%`;
+    elements.investigationState.textContent = evidenceAvailable
+      ? "DIAGNOSIS AVAILABLE"
+      : "DIAGNOSIS LOCKED";
     elements.ticketDiagnosis.hidden = !diagnosed;
     elements.ticketDiagnosisText.textContent = diagnosed ? ticket.correctDiagnosis : "—";
     elements.ticketRootCause.textContent = diagnosed ? ticket.rootCause : "—";
@@ -607,6 +700,26 @@ TERMINAL
       const wasWrong = attempted.includes(option.optionId);
       return `<button class="decision-option${wasWrong ? " wrong" : ""}" type="button" data-kind="${isDiagnosis ? "diagnosis" : "action"}" data-option-id="${escapeHtml(option.optionId)}" data-letter="${String.fromCharCode(65 + index)}" ${wasWrong ? "disabled" : ""}>${escapeHtml(option.label)}</button>`;
     }).join("");
+  }
+
+  function updateActionControls() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+    const locked = Boolean(
+      rack?.status === "critical" &&
+      ticket?.investigationRequired &&
+      ticket.stage === "reported" &&
+      !hasRequiredEvidence(ticket)
+    );
+    elements.diagnoseBtn.disabled = locked;
+    elements.diagnoseBtn.textContent = locked ? "진단 잠김 · DIAGNOSE LOCKED" : "진단 · DIAGNOSE";
+    elements.diagnosisGateMessage.hidden = !locked;
+    if (locked) {
+      const remaining = Math.max(0, ticket.requiredEvidenceCount - getEvidenceCount(ticket));
+      elements.diagnosisGateMessage.textContent = `Investigation required: ${remaining} more evidence`;
+    } else {
+      elements.diagnosisGateMessage.textContent = "";
+    }
   }
 
   function getStageLabel(stage) {
@@ -667,6 +780,18 @@ TERMINAL
     elements.endShiftBtn.hidden = shift.status !== "RUNNING";
     elements.endShiftBtn.disabled = shift.status !== "RUNNING";
     elements.incidentBtn.disabled = shift.status === "ENDED";
+
+    const difficultyKey = getCurrentDifficultyKey();
+    const difficulty = getDifficultyConfig(difficultyKey);
+    elements.currentDifficulty.textContent = difficulty.label;
+    elements.currentDifficulty.className = difficultyKey.toLowerCase();
+    elements.difficultySummary.textContent = `SLA ×${difficulty.slaMultiplier.toFixed(2)} · SCORE ×${difficulty.scoreMultiplier.toFixed(2)} · INVESTIGATION ${difficulty.investigationRequired ? "REQUIRED" : "OPTIONAL"}`;
+    elements.difficultySelector.querySelectorAll("[data-difficulty]").forEach((button) => {
+      const selected = button.dataset.difficulty === difficultyKey;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+      button.disabled = shift.status !== "IDLE";
+    });
   }
 
   function recalculateTemperature() {
@@ -679,6 +804,7 @@ TERMINAL
     updateDashboard();
     updateTicketPanel();
     updateDecisionPanel();
+    updateActionControls();
     updateIncidentQueue();
     updateShiftPanel();
     renderTerminal();
@@ -708,14 +834,24 @@ TERMINAL
     const ticketId = `TKT-${String(++game.ticketSequence).padStart(4, "0")}`;
     const createdAt = Date.now();
     const countedInShift = game.shift.status === "RUNNING";
+    const difficultyKey = getCurrentDifficultyKey();
+    const difficulty = getDifficultyConfig(difficultyKey);
+    const appliedSlaSeconds = Math.max(1, Math.round(incident.slaSeconds * difficulty.slaMultiplier));
+    const rewardScore = Math.max(0, Math.round(incident.score * difficulty.scoreMultiplier));
+    const requiredEvidenceCount = difficulty.investigationRequired
+      ? calculateRequiredEvidence(incident.usefulCommands)
+      : 0;
 
     rack.ticket = {
       ...incident,
+      difficulty: difficultyKey,
       affectedRack: rackLabel(rack.id),
       ticketId,
       createdAt,
       resolvedAt: null,
-      slaDeadline: createdAt + incident.slaSeconds * 1000,
+      appliedSlaSeconds,
+      rewardScore,
+      slaDeadline: createdAt + appliedSlaSeconds * 1000,
       slaBreached: false,
       slaPenaltyApplied: false,
       slaFrozenRemaining: null,
@@ -727,6 +863,8 @@ TERMINAL
       terminalHistory: [],
       investigationEvidence: [],
       countedUsefulCommands: [],
+      investigationRequired: difficulty.investigationRequired,
+      requiredEvidenceCount,
       prematureRecoveryPenalized: false,
       countedInShift,
       previousStatus: rack.status,
@@ -739,7 +877,7 @@ TERMINAL
     game.availability = Math.max(0, game.availability - 0.85);
     recalculateTemperature();
 
-    addLog("ALERT", `${ticketId} ${rackLabel(rack.id)} Critical / ${incident.symptom} (SLA ${incident.slaSeconds}s)`);
+    addLog("ALERT", `${ticketId} ${rackLabel(rack.id)} Critical / ${incident.symptom} (SLA ${appliedSlaSeconds}s · ${difficultyKey})`);
     showToast(`${ticketId}: ${rackLabel(rack.id)}에 Critical Incident 발생`, "error");
     refreshUI();
     return true;
@@ -759,6 +897,13 @@ TERMINAL
     }
 
     const ticket = rack.ticket;
+    if (ticket.investigationRequired && !hasRequiredEvidence(ticket)) {
+      const remaining = Math.max(0, ticket.requiredEvidenceCount - getEvidenceCount(ticket));
+      showToast(`Hard Mode: Investigation Evidence가 ${remaining}개 더 필요합니다.`, "error");
+      addLog("INVESTIGATION", `${ticket.ticketId} diagnosis locked / ${remaining} evidence required`);
+      updateActionControls();
+      return;
+    }
     if (ticket.stage === "action") {
       showToast("진단 완료 상태입니다. 올바른 Action을 선택하세요.");
       updateDecisionPanel();
@@ -808,6 +953,7 @@ TERMINAL
 
   function resolveIncident(rack) {
     const ticket = rack.ticket;
+    const awardedScore = ticket.rewardScore ?? ticket.score;
     ticket.resolvedAt = Date.now();
     if (ticket.countedInShift) {
       game.stats.resolvedIncidents += 1;
@@ -822,12 +968,12 @@ TERMINAL
     rack.status = ticket.previousStatus ?? "healthy";
     rack.metrics = ticket.previousMetrics ? { ...ticket.previousMetrics } : createNormalMetrics();
     rack.ticket = null;
-    game.score += ticket.score;
+    game.score += awardedScore;
     game.availability = Math.min(100, game.availability + 0.85);
     recalculateTemperature();
-    elements.scoreTrend.textContent = `복구 성공 +${ticket.score} PTS`;
-    addLog("RECOVERY", `${rackLabel(rack.id)} restored / ${ticket.ticketId} +${ticket.score} PTS`);
-    showToast(`서비스가 정상 복구되었습니다. +${ticket.score}점`, "success");
+    elements.scoreTrend.textContent = `복구 성공 +${awardedScore} PTS`;
+    addLog("RECOVERY", `${rackLabel(rack.id)} restored / ${ticket.ticketId} +${awardedScore} PTS (${ticket.difficulty})`);
+    showToast(`서비스가 정상 복구되었습니다. +${awardedScore}점`, "success");
     refreshUI();
   }
 
@@ -922,8 +1068,9 @@ TERMINAL
     game.shift.autoIncidentTimerId = null;
     if (game.shift.status !== "RUNNING") return;
 
-    const minimum = Math.min(SHIFT_CONFIG.autoIncidentMinMs, SHIFT_CONFIG.autoIncidentMaxMs);
-    const maximum = Math.max(SHIFT_CONFIG.autoIncidentMinMs, SHIFT_CONFIG.autoIncidentMaxMs);
+    const difficulty = getDifficultyConfig(game.shift.difficulty);
+    const minimum = Math.min(difficulty.autoIncidentMinMs, difficulty.autoIncidentMaxMs);
+    const maximum = Math.max(difficulty.autoIncidentMinMs, difficulty.autoIncidentMaxMs);
     const delay = randomBetween(minimum, maximum);
     game.shift.autoIncidentTimerId = setTimeout(() => {
       game.shift.autoIncidentTimerId = null;
@@ -940,7 +1087,7 @@ TERMINAL
     if (game.shift.remainingSeconds === 0) endShift();
   }
 
-  function resetShift() {
+  function resetShift({ resetDifficulty = false } = {}) {
     clearShiftTimers();
     racks.forEach((rack, index) => {
       rack.status = initialRackState[index].status;
@@ -955,7 +1102,9 @@ TERMINAL
     game.ticketSequence = 0;
     game.incidentHistory = [];
     game.stats = createEmptyStats();
+    if (resetDifficulty) game.selectedDifficulty = "NORMAL";
     game.shift.status = "IDLE";
+    game.shift.difficulty = null;
     game.shift.startedAt = null;
     game.shift.endsAt = null;
     game.shift.remainingSeconds = SHIFT_CONFIG.durationSeconds;
@@ -971,28 +1120,44 @@ TERMINAL
       showToast("이미 교대가 진행 중입니다.");
       return;
     }
-    resetShift();
+    const selectedDifficulty = game.selectedDifficulty;
+    resetShift({ resetDifficulty: false });
     const startedAt = Date.now();
     game.shift.status = "RUNNING";
+    game.shift.difficulty = selectedDifficulty;
     game.shift.startedAt = startedAt;
     game.shift.endsAt = startedAt + SHIFT_CONFIG.durationSeconds * 1000;
     game.shift.remainingSeconds = SHIFT_CONFIG.durationSeconds;
     elements.scoreTrend.textContent = "교대 운영 중";
-    addLog("SHIFT START", "Night Shift started / 22:00 → 06:00");
+    addLog("SHIFT START", `Night Shift started / 22:00 → 06:00 / ${selectedDifficulty}`);
     startShiftHeartbeat();
     scheduleNextIncident();
     refreshUI();
   }
 
+  function startNewShift() {
+    resetShift({ resetDifficulty: true });
+    addLog("SYSTEM", "New Shift ready - select Difficulty and press START SHIFT");
+  }
+
   function calculateShiftReport() {
     const stats = game.stats;
+    const difficulty = game.shift.difficulty ?? game.selectedDifficulty;
     const diagnosisAttempts = stats.correctDiagnoses + stats.wrongDiagnoses;
     const actionAttempts = stats.correctActions + stats.wrongActions;
     const percent = (correct, total) => total === 0 ? 100 : (correct / total) * 100;
     const slaCompliance = stats.generatedIncidents === 0
       ? 100
       : ((stats.generatedIncidents - stats.slaBreaches) / stats.generatedIncidents) * 100;
+    const requiredInvestigations = game.incidentHistory.filter((ticket) =>
+      ticket.countedInShift && ticket.difficulty === "HARD" && ticket.investigationRequired
+    );
+    const completedInvestigations = requiredInvestigations.filter(hasRequiredEvidence);
+    const investigationCoverage = requiredInvestigations.length
+      ? completedInvestigations.length / requiredInvestigations.length * 100
+      : null;
     return {
+      difficulty,
       score: game.score,
       generated: stats.generatedIncidents,
       resolved: stats.resolvedIncidents,
@@ -1004,18 +1169,26 @@ TERMINAL
       averageMttr: stats.resolvedIncidents === 0 ? 0 : stats.totalResolutionTime / stats.resolvedIncidents,
       commandsExecuted: stats.commandsExecuted,
       usefulCommands: stats.usefulCommands,
-      invalidCommands: stats.invalidCommands
+      invalidCommands: stats.invalidCommands,
+      investigationRequiredIncidents: requiredInvestigations.length,
+      investigationCompletedIncidents: completedInvestigations.length,
+      investigationCoverage
     };
   }
 
   function calculateGrade(report) {
     const scorePerformance = Math.max(0, Math.min(100, (report.score / GRADE_CONFIG.scoreTarget) * 100));
+    const difficulty = getDifficultyConfig(report.difficulty);
+    const investigationPenalty = report.difficulty === "HARD" && report.investigationCoverage !== null
+      ? (100 - report.investigationCoverage) / 100 * difficulty.investigationGradePenaltyMax
+      : 0;
     const performance =
       report.slaCompliance * GRADE_CONFIG.weights.sla +
       report.diagnosisAccuracy * GRADE_CONFIG.weights.diagnosis +
       report.actionAccuracy * GRADE_CONFIG.weights.action +
       scorePerformance * GRADE_CONFIG.weights.score -
-      report.unresolved * GRADE_CONFIG.unresolvedPenalty;
+      report.unresolved * GRADE_CONFIG.unresolvedPenalty -
+      investigationPenalty;
     return GRADE_CONFIG.thresholds.find((rule) => performance >= rule.minimum)?.grade ?? "F";
   }
 
@@ -1034,6 +1207,13 @@ TERMINAL
     elements.reportCommands.textContent = report.commandsExecuted;
     elements.reportUsefulCommands.textContent = report.usefulCommands;
     elements.reportInvalidCommands.textContent = report.invalidCommands;
+    elements.reportDifficulty.textContent = report.difficulty;
+    elements.reportDifficulty.className = `report-difficulty ${report.difficulty.toLowerCase()}`;
+    elements.reportInvestigationCoverage.textContent = report.difficulty === "HARD"
+      ? report.investigationCoverage === null
+        ? "N/A"
+        : `${report.investigationCoverage.toFixed(1)}%`
+      : "OPTIONAL";
     elements.reportModal.hidden = false;
   }
 
@@ -1110,6 +1290,18 @@ TERMINAL
     refreshUI(true);
   }
 
+  function handleDifficultySelection(event) {
+    const button = event.target.closest("[data-difficulty]");
+    if (!button || game.shift.status !== "IDLE") return;
+
+    const difficulty = button.dataset.difficulty;
+    if (!Object.hasOwn(DIFFICULTY_CONFIG, difficulty)) return;
+
+    game.selectedDifficulty = difficulty;
+    refreshUI();
+    addLog("SYSTEM", `Difficulty selected - ${difficulty}`);
+  }
+
   function handleQueueSelection(event) {
     const button = event.target.closest("[data-queue-rack-id]");
     if (!button) return;
@@ -1126,6 +1318,7 @@ TERMINAL
   function initializeGame() {
     elements.rackGrid.addEventListener("click", handleRackSelection);
     elements.incidentQueue.addEventListener("click", handleQueueSelection);
+    elements.difficultySelector.addEventListener("click", handleDifficultySelection);
     elements.incidentBtn.addEventListener("click", () => triggerIncident("manual"));
     elements.diagnoseBtn.addEventListener("click", diagnoseSelected);
     elements.recoverBtn.addEventListener("click", recoverSelected);
@@ -1134,7 +1327,7 @@ TERMINAL
     elements.endShiftBtn.addEventListener("click", openEndShiftConfirmation);
     elements.cancelEndShiftBtn.addEventListener("click", closeEndShiftConfirmation);
     elements.confirmEndShiftBtn.addEventListener("click", confirmManualEndShift);
-    elements.newShiftBtn.addEventListener("click", startShift);
+    elements.newShiftBtn.addEventListener("click", startNewShift);
     elements.terminalForm.addEventListener("submit", handleTerminalSubmit);
     elements.terminalClearBtn.addEventListener("click", clearTerminalSession);
     refreshUI();

@@ -1,7 +1,7 @@
 /**
  * 장애(Incident) 데이터 카탈로그
  *
- * v0.5부터 Terminal 조사 결과도 Incident 데이터와 함께 관리합니다.
+ * v0.6부터 Terminal 조사 결과와 Easy Mode 조사 힌트를 Incident 데이터와 함께 관리합니다.
  * app.js는 명령을 안전하게 분류하고, 이 파일은 장애별로 달라지는
  * 출력과 유용한 명령 목록을 제공합니다.
  */
@@ -31,6 +31,7 @@
       temperature: 23.8,
       score: 100,
       slaSeconds: 55,
+      investigationHint: "CHECK AREA: SERVICE / HTTP",
       usefulCommands: ["systemctl status nginx", "journalctl -u nginx", "curl"],
       diagnosticCommands: {
         "systemctl status nginx": `● nginx.service - A high performance web server
@@ -62,6 +63,7 @@ LISTEN  0       128      0.0.0.0:22          users:((\"sshd\",pid=721,fd=3))
       temperature: 24.1,
       score: 100,
       slaSeconds: 60,
+      investigationHint: "CHECK AREA: STORAGE",
       usefulCommands: ["df -h"],
       diagnosticCommands: {
         "df -h": `Filesystem      Size  Used Avail Use% Mounted on
@@ -87,6 +89,7 @@ Aug 08 22:18:43 nginx[938]: could not write access log`
       temperature: 27.2,
       score: 100,
       slaSeconds: 45,
+      investigationHint: "CHECK AREA: RESOURCE",
       usefulCommands: ["top", "uptime"],
       diagnosticCommands: {
         "top": `top - 22:26:11 up 47 days,  4:18,  1 user,  load average: 9.84, 8.91, 6.42
@@ -113,6 +116,7 @@ PID   USER   %CPU   %MEM   COMMAND
       temperature: 22.6,
       score: 100,
       slaSeconds: 50,
+      investigationHint: "CHECK AREA: NETWORK",
       usefulCommands: ["ping", "curl", "ss -lntp", "traceroute"],
       diagnosticCommands: {
         "ping": `PING 10.20.0.1 (10.20.0.1) 56(84) bytes of data.
@@ -149,6 +153,7 @@ LISTEN  0       128      0.0.0.0:22          users:((\"sshd\",pid=721,fd=3))`,
       temperature: 38.5,
       score: 100,
       slaSeconds: 40,
+      investigationHint: "CHECK AREA: FACILITY / TEMPERATURE",
       usefulCommands: ["top"],
       sensorAlert: `TEMP SENSOR WARNING
 INLET TEMP: 38.5°C

@@ -25,6 +25,7 @@
         <div>
           <p class="eyebrow">SHIFT CONTROL</p>
           <h2>NIGHT SHIFT <span>22:00 → 06:00</span></h2>
+          <div class="difficulty-current">DIFFICULTY <strong id="currentDifficulty">NORMAL</strong></div>
         </div>
         <span class="shift-status idle" id="shiftStatus">IDLE</span>
       </div>
@@ -34,6 +35,12 @@
         <div><small>SLA VIOLATIONS</small><strong id="shiftSlaBreaches">0</strong></div>
       </div>
       <div class="shift-actions">
+        <div class="difficulty-selector" id="difficultySelector" role="group" aria-label="난이도 선택">
+          <button class="difficulty-btn easy" type="button" data-difficulty="EASY" aria-pressed="false">EASY</button>
+          <button class="difficulty-btn normal selected" type="button" data-difficulty="NORMAL" aria-pressed="true">NORMAL</button>
+          <button class="difficulty-btn hard" type="button" data-difficulty="HARD" aria-pressed="false">HARD</button>
+        </div>
+        <small class="difficulty-summary" id="difficultySummary">SLA ×1.00 · SCORE ×1.00 · INVESTIGATION OPTIONAL</small>
         <button class="shift-start-btn" id="startShiftBtn" type="button">교대 시작 · START SHIFT</button>
         <button class="shift-end-btn" id="endShiftBtn" type="button" disabled hidden>교대 종료 · END SHIFT</button>
       </div>
@@ -120,6 +127,15 @@
                 <div><small>AFFECTED RACK</small><strong id="ticketRack">—</strong></div>
                 <div><small>SLA REMAINING</small><strong class="sla-time" id="ticketSla">00:00</strong></div>
               </div>
+              <div class="ticket-hint" id="ticketHint" hidden></div>
+              <div class="investigation-progress" id="investigationProgress" hidden>
+                <div class="investigation-progress__top">
+                  <span>INVESTIGATION</span>
+                  <strong>EVIDENCE <span id="investigationCurrent">0</span> / <span id="investigationRequired">0</span></strong>
+                </div>
+                <div class="investigation-track"><span id="investigationBar"></span></div>
+                <p id="investigationState">DIAGNOSIS LOCKED</p>
+              </div>
               <dl class="ticket-details">
                 <div><dt>증상 · SYMPTOM</dt><dd id="ticketSymptom">—</dd></div>
                 <div class="diagnosis-result" id="ticketDiagnosis" hidden>
@@ -145,6 +161,7 @@
             <button class="action-btn diagnose" id="diagnoseBtn" type="button">진단 · DIAGNOSE</button>
             <button class="action-btn recover" id="recoverBtn" type="button">복구 · RECOVER</button>
           </div>
+          <p class="diagnosis-gate-message" id="diagnosisGateMessage" hidden></p>
           <p class="hint">운영 절차: Critical Rack 선택 → 진단 후보 선택 → Action 선택</p>
         </section>
 
@@ -207,6 +224,8 @@
         <div><small>COMMANDS</small><strong id="reportCommands">0</strong></div>
         <div><small>USEFUL COMMANDS</small><strong id="reportUsefulCommands">0</strong></div>
         <div><small>INVALID COMMANDS</small><strong id="reportInvalidCommands">0</strong></div>
+        <div><small>DIFFICULTY</small><strong class="report-difficulty" id="reportDifficulty">NORMAL</strong></div>
+        <div><small>INVESTIGATION COVERAGE</small><strong id="reportInvestigationCoverage">OPTIONAL</strong></div>
       </div>
       <button class="new-shift-btn" id="newShiftBtn" type="button">새 교대 시작 · NEW SHIFT</button>
     </div>

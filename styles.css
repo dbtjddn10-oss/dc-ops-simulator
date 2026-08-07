@@ -129,6 +129,11 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .shift-console__heading { display: flex; align-items: center; gap: 12px; }
 .shift-console__heading h2 { margin: 0; font-size: 0.84rem; letter-spacing: 0.08em; }
 .shift-console__heading h2 span { display: block; margin-top: 4px; color: var(--muted); font: 500 0.64rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.difficulty-current { margin-top: 7px; color: var(--muted); font-size: 0.5rem; letter-spacing: 0.08em; }
+.difficulty-current strong { margin-left: 5px; color: var(--blue); font: 800 0.62rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.difficulty-current strong.easy { color: var(--green); }
+.difficulty-current strong.normal { color: var(--blue); }
+.difficulty-current strong.hard { color: var(--red); }
 .shift-status { padding: 4px 8px; border: 1px solid #3b5064; border-radius: 999px; color: var(--muted); font: 800 0.58rem ui-monospace, SFMono-Regular, Consolas, monospace; }
 .shift-status.running { border-color: rgba(66, 227, 164, 0.48); color: var(--green); background: rgba(66, 227, 164, 0.08); }
 .shift-status.ended { border-color: rgba(255, 77, 103, 0.48); color: var(--red); background: rgba(255, 77, 103, 0.08); }
@@ -138,7 +143,15 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .shift-clocks small { display: block; margin-bottom: 5px; color: var(--muted); font-size: 0.5rem; letter-spacing: 0.07em; }
 .shift-clocks strong { color: #d8e9f5; font: 700 0.86rem ui-monospace, SFMono-Regular, Consolas, monospace; }
 
-.shift-actions { display: grid; gap: 7px; }
+.shift-actions { display: grid; min-width: 220px; gap: 7px; }
+.difficulty-selector { display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; }
+.difficulty-btn { min-height: 28px; padding: 5px 7px; border: 1px solid #30455b; border-radius: 6px; color: var(--muted); background: rgba(11, 20, 29, 0.9); cursor: pointer; font: 800 0.55rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.difficulty-btn.easy.selected { border-color: rgba(66, 227, 164, 0.58); color: var(--green); background: rgba(66, 227, 164, 0.1); }
+.difficulty-btn.normal.selected { border-color: rgba(76, 141, 255, 0.62); color: #8ab7ff; background: rgba(76, 141, 255, 0.12); }
+.difficulty-btn.hard.selected { border-color: rgba(255, 77, 103, 0.62); color: #ff9bad; background: rgba(255, 77, 103, 0.12); }
+.difficulty-btn:disabled { cursor: not-allowed; opacity: 0.48; }
+.difficulty-btn:hover:not(:disabled) { filter: brightness(1.22); }
+.difficulty-summary { color: #60768a; text-align: center; font: 0.48rem/1.4 ui-monospace, SFMono-Regular, Consolas, monospace; }
 
 .shift-start-btn,
 .shift-end-btn,
@@ -358,6 +371,17 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .ticket-details dd { margin: 0; color: #bbcbd8; font-size: 0.63rem; line-height: 1.45; word-break: keep-all; }
 .diagnosis-result { margin-top: 2px; padding-top: 8px; border-top: 1px solid rgba(255, 200, 87, 0.2); }
 .diagnosis-result dd { color: #ffda8f; }
+.ticket-hint { margin: 0 0 10px; padding: 8px 9px; border: 1px solid rgba(38, 217, 255, 0.32); border-radius: 6px; color: #9aefff; background: rgba(38, 217, 255, 0.07); font: 700 0.6rem/1.45 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.investigation-progress { margin: 0 0 10px; padding: 9px; border: 1px solid rgba(255, 77, 103, 0.34); border-radius: 7px; background: rgba(255, 77, 103, 0.06); }
+.investigation-progress.available { border-color: rgba(66, 227, 164, 0.38); background: rgba(66, 227, 164, 0.06); }
+.investigation-progress__top { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--muted); font-size: 0.5rem; letter-spacing: 0.06em; }
+.investigation-progress__top strong { color: #f1c2ca; font: 800 0.58rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.investigation-progress.available .investigation-progress__top strong { color: var(--green); }
+.investigation-track { height: 4px; margin-top: 8px; overflow: hidden; border-radius: 999px; background: #263544; }
+.investigation-track span { display: block; width: 0; height: 100%; border-radius: inherit; background: var(--red); transition: width 200ms ease; }
+.investigation-progress.available .investigation-track span { background: var(--green); }
+.investigation-progress > p { margin: 7px 0 0; color: var(--red); font: 800 0.53rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.investigation-progress.available > p { color: var(--green); }
 [hidden] { display: none !important; }
 
 .decision-panel {
@@ -435,6 +459,8 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .action-btn.incident { grid-column: 1 / -1; border-color: rgba(255, 77, 103, 0.5); color: #ffb1bd; background: linear-gradient(135deg, rgba(255, 77, 103, 0.2), rgba(255, 77, 103, 0.08)); }
 .action-btn.diagnose { border-color: rgba(255, 200, 87, 0.38); color: #ffda8f; }
 .action-btn.recover { border-color: rgba(66, 227, 164, 0.38); color: #8af0c5; }
+.action-btn:disabled { cursor: not-allowed; filter: grayscale(0.25); opacity: 0.42; transform: none; }
+.diagnosis-gate-message { margin: 9px 0 0; padding: 7px 8px; border: 1px solid rgba(255, 77, 103, 0.3); border-radius: 6px; color: #ff9bad; background: rgba(255, 77, 103, 0.06); text-align: center; font-size: 0.58rem; }
 
 .hint { margin: 11px 0 0; color: var(--muted); font-size: 0.64rem; line-height: 1.5; text-align: center; }
 
@@ -454,6 +480,7 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .log-type.wrong-diag, .log-type.wrong-action { color: var(--red); }
 .log-type.diag-ok { color: var(--green); }
 .log-type.diag { color: var(--yellow); }
+.log-type.investigation { color: var(--yellow); }
 .log-type.recovery { color: var(--green); }
 .log-message {
   min-width: 0;
@@ -586,6 +613,9 @@ h1 { margin: 0; font-size: clamp(1.12rem, 2.2vw, 1.55rem); letter-spacing: 0.08e
 .report-grid > div { min-width: 0; padding: 11px; border: 1px solid #293f53; border-radius: 7px; background: rgba(5, 10, 16, 0.58); }
 .report-grid small { display: block; margin-bottom: 7px; color: var(--muted); font-size: 0.48rem; letter-spacing: 0.05em; }
 .report-grid strong { font: 700 0.78rem ui-monospace, SFMono-Regular, Consolas, monospace; }
+.report-difficulty.easy { color: var(--green); }
+.report-difficulty.normal { color: #8ab7ff; }
+.report-difficulty.hard { color: var(--red); }
 .new-shift-btn { width: 100%; margin-top: 16px; }
 
 @keyframes pulse { 50% { opacity: 0.35; } }
