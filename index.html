@@ -20,6 +20,25 @@
       <div class="shift-badge"><span class="pulse-dot"></span><span>NOC ONLINE · NIGHT SHIFT</span></div>
     </header>
 
+    <section class="shift-console" aria-label="야간 교대 현황">
+      <div class="shift-console__heading">
+        <div>
+          <p class="eyebrow">SHIFT CONTROL</p>
+          <h2>NIGHT SHIFT <span>22:00 → 06:00</span></h2>
+        </div>
+        <span class="shift-status idle" id="shiftStatus">IDLE</span>
+      </div>
+      <div class="shift-clocks">
+        <div><small>SIMULATED TIME</small><strong id="shiftGameTime">22:00</strong></div>
+        <div><small>REAL TIME LEFT</small><strong id="shiftRemaining">03:00</strong></div>
+        <div><small>SLA VIOLATIONS</small><strong id="shiftSlaBreaches">0</strong></div>
+      </div>
+      <div class="shift-actions">
+        <button class="shift-start-btn" id="startShiftBtn" type="button">교대 시작 · START SHIFT</button>
+        <button class="shift-end-btn" id="endShiftBtn" type="button" disabled hidden>교대 종료 · END SHIFT</button>
+      </div>
+    </section>
+
     <section class="dashboard" aria-label="운영 현황 대시보드">
       <article class="stat-card" style="--accent: var(--cyan)">
         <div class="stat-label">현재 점수 · Score</div>
@@ -57,6 +76,21 @@
           </div>
         </div>
         <div class="racks" id="rackGrid"></div>
+
+        <section class="queue-panel" aria-labelledby="queueTitle">
+          <div class="queue-header">
+            <div>
+              <p class="eyebrow">OPERATIONS BACKLOG</p>
+              <h2 id="queueTitle">INCIDENT QUEUE</h2>
+            </div>
+            <span id="queueCount">0 OPEN</span>
+          </div>
+          <div class="queue-columns" aria-hidden="true">
+            <span>TICKET / RACK</span><span>SEVERITY</span><span>STAGE</span><span>SLA</span>
+          </div>
+          <div class="incident-queue" id="incidentQueue"></div>
+          <p class="queue-empty" id="queueEmpty">현재 처리 대기 중인 Incident가 없습니다.</p>
+        </section>
       </section>
 
       <aside class="side-column">
@@ -121,6 +155,40 @@
       </aside>
     </div>
   </main>
+
+  <section class="confirm-modal" id="endShiftConfirmModal" role="dialog" aria-modal="true" aria-labelledby="endShiftConfirmTitle" aria-describedby="endShiftConfirmDescription" hidden>
+    <div class="confirm-card">
+      <p class="eyebrow">MANUAL TERMINATION</p>
+      <h2 id="endShiftConfirmTitle">현재 교대를 종료하시겠습니까?</h2>
+      <p id="endShiftConfirmDescription">해결되지 않은 Incident는 최종 평가에 반영됩니다.</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel-btn" id="cancelEndShiftBtn" type="button">계속 운영 · CANCEL</button>
+        <button class="confirm-end-btn" id="confirmEndShiftBtn" type="button">교대 종료 · END SHIFT</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="report-modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportTitle" hidden>
+    <div class="report-card">
+      <p class="eyebrow">SHIFT COMPLETE</p>
+      <div class="report-heading">
+        <div><h2 id="reportTitle">NIGHT SHIFT REPORT</h2><p>22:00 → 06:00 운영 결과</p></div>
+        <strong class="report-grade" id="reportGrade">-</strong>
+      </div>
+      <div class="report-score"><span>FINAL SCORE</span><strong id="reportScore">0 PTS</strong></div>
+      <div class="report-grid">
+        <div><small>GENERATED</small><strong id="reportGenerated">0</strong></div>
+        <div><small>RESOLVED</small><strong id="reportResolved">0</strong></div>
+        <div><small>UNRESOLVED</small><strong id="reportUnresolved">0</strong></div>
+        <div><small>SLA VIOLATIONS</small><strong id="reportBreaches">0</strong></div>
+        <div><small>SLA COMPLIANCE</small><strong id="reportSlaCompliance">100%</strong></div>
+        <div><small>DIAG ACCURACY</small><strong id="reportDiagnosisAccuracy">100%</strong></div>
+        <div><small>ACTION ACCURACY</small><strong id="reportActionAccuracy">100%</strong></div>
+        <div><small>AVERAGE MTTR</small><strong id="reportMttr">0.0s</strong></div>
+      </div>
+      <button class="new-shift-btn" id="newShiftBtn" type="button">새 교대 시작 · NEW SHIFT</button>
+    </div>
+  </section>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
