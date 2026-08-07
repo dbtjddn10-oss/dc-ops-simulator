@@ -154,6 +154,25 @@
         </section>
       </aside>
     </div>
+
+    <section class="terminal-panel" aria-labelledby="terminalTitle">
+      <div class="terminal-header">
+        <div>
+          <p class="eyebrow">SAFE SIMULATED ENVIRONMENT</p>
+          <h2 id="terminalTitle">LINUX TERMINAL <span id="terminalRackLabel">NO RACK SELECTED</span></h2>
+        </div>
+        <button class="terminal-clear-btn" id="terminalClearBtn" type="button" disabled>CLEAR</button>
+      </div>
+      <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
+      <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
+      <form class="terminal-command" id="terminalForm" autocomplete="off">
+        <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
+        <span class="terminal-prompt" id="terminalPrompt">operator@rack--:~$</span>
+        <input id="terminalInput" type="text" inputmode="text" spellcheck="false" autocapitalize="none" placeholder="Rack을 선택하세요" disabled>
+        <button class="terminal-run-btn" id="terminalRunBtn" type="submit" disabled>RUN</button>
+      </form>
+      <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
+    </section>
   </main>
 
   <section class="confirm-modal" id="endShiftConfirmModal" role="dialog" aria-modal="true" aria-labelledby="endShiftConfirmTitle" aria-describedby="endShiftConfirmDescription" hidden>
@@ -185,6 +204,9 @@
         <div><small>DIAG ACCURACY</small><strong id="reportDiagnosisAccuracy">100%</strong></div>
         <div><small>ACTION ACCURACY</small><strong id="reportActionAccuracy">100%</strong></div>
         <div><small>AVERAGE MTTR</small><strong id="reportMttr">0.0s</strong></div>
+        <div><small>COMMANDS</small><strong id="reportCommands">0</strong></div>
+        <div><small>USEFUL COMMANDS</small><strong id="reportUsefulCommands">0</strong></div>
+        <div><small>INVALID COMMANDS</small><strong id="reportInvalidCommands">0</strong></div>
       </div>
       <button class="new-shift-btn" id="newShiftBtn" type="button">새 교대 시작 · NEW SHIFT</button>
     </div>

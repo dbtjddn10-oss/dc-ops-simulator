@@ -1,7 +1,7 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.4 설정 ----------------
+  // ---------------- v0.5 설정 ----------------
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -76,7 +76,10 @@
       correctActions: 0,
       wrongActions: 0,
       totalResolutionTime: 0,
-      unresolvedIncidents: 0
+      unresolvedIncidents: 0,
+      commandsExecuted: 0,
+      usefulCommands: 0,
+      invalidCommands: 0
     };
   }
 
@@ -84,7 +87,8 @@
     id: index + 1,
     status: index === 4 ? "warning" : "healthy",
     ticket: null,
-    metrics: createNormalMetrics(index === 4)
+    metrics: createNormalMetrics(index === 4),
+    terminalHistory: []
   }));
 
   // 새 교대 때 Rack 05의 Warning을 포함한 최초 상태로 돌아가기 위한 스냅샷입니다.
@@ -99,6 +103,7 @@
     temperature: 21.4,
     selectedId: null,
     ticketSequence: 0,
+    incidentHistory: [],
     stats: createEmptyStats(),
     shift: {
       status: "IDLE",
@@ -167,6 +172,17 @@
     reportDiagnosisAccuracy: document.querySelector("#reportDiagnosisAccuracy"),
     reportActionAccuracy: document.querySelector("#reportActionAccuracy"),
     reportMttr: document.querySelector("#reportMttr"),
+    reportCommands: document.querySelector("#reportCommands"),
+    reportUsefulCommands: document.querySelector("#reportUsefulCommands"),
+    reportInvalidCommands: document.querySelector("#reportInvalidCommands"),
+    terminalRackLabel: document.querySelector("#terminalRackLabel"),
+    terminalSensor: document.querySelector("#terminalSensor"),
+    terminalOutput: document.querySelector("#terminalOutput"),
+    terminalForm: document.querySelector("#terminalForm"),
+    terminalPrompt: document.querySelector("#terminalPrompt"),
+    terminalInput: document.querySelector("#terminalInput"),
+    terminalRunBtn: document.querySelector("#terminalRunBtn"),
+    terminalClearBtn: document.querySelector("#terminalClearBtn"),
     newShiftBtn: document.querySelector("#newShiftBtn")
   };
 
@@ -244,6 +260,252 @@
   function formatSimulatedTime(totalMinutes) {
     const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
     return `${String(Math.floor(wrapped / 60)).padStart(2, "0")}:${String(wrapped % 60).padStart(2, "0")}`;
+  }
+
+  // ---------------- 안전한 Simulated Linux Terminal ----------------
+  const HELP_OUTPUT = `AVAILABLE SIMULATED COMMANDS
+
+SYSTEM
+  hostname
+  uptime
+
+RESOURCES
+  top
+  free -m
+  df -h
+
+NETWORK
+  ping [host]
+  curl [url]
+  ss -lntp
+  ip addr
+  traceroute [host]
+
+SERVICE
+  systemctl status nginx
+  journalctl -u nginx
+
+TERMINAL
+  help
+  clear`;
+
+  const EXACT_TERMINAL_COMMANDS = new Set([
+    "help",
+    "clear",
+    "hostname",
+    "uptime",
+    "df -h",
+    "free -m",
+    "top",
+    "systemctl status nginx",
+    "journalctl -u nginx",
+    "ss -lntp",
+    "ip addr"
+  ]);
+
+  function normalizeTerminalCommand(value) {
+    return String(value ?? "").trim().replaceAll(/\s+/g, " ");
+  }
+
+  function parseTerminalCommand(value) {
+    const normalized = normalizeTerminalCommand(value);
+    if (!normalized) return { normalized, canonical: null };
+    if (EXACT_TERMINAL_COMMANDS.has(normalized)) {
+      return { normalized, canonical: normalized };
+    }
+    if (normalized === "ping" || normalized.startsWith("ping ")) {
+      return { normalized, canonical: "ping" };
+    }
+    if (normalized === "curl" || normalized.startsWith("curl ")) {
+      return { normalized, canonical: "curl" };
+    }
+    if (normalized === "traceroute" || normalized.startsWith("traceroute ")) {
+      return { normalized, canonical: "traceroute" };
+    }
+    return { normalized, canonical: null };
+  }
+
+  function terminalTarget(normalizedCommand, fallback) {
+    const [, ...parts] = normalizedCommand.split(" ");
+    return parts.join(" ") || fallback;
+  }
+
+  const DEFAULT_TERMINAL_OUTPUTS = Object.freeze({
+    help: () => HELP_OUTPUT,
+    hostname: (rack) => `rack${String(rack.id).padStart(2, "0")}.dc-ops.local`,
+    uptime: (rack) => `22:${String(10 + rack.id).padStart(2, "0")}:08 up 47 days, 4:${rack.id}2, 1 user, load average: 0.${rack.id}8, 0.42, 0.31`,
+    "df -h": (rack) => {
+      const percent = rack.metrics.Disk;
+      const used = Math.round(50 * percent / 100);
+      return `Filesystem      Size  Used Avail Use% Mounted on\n/dev/sda1        50G   ${String(used).padStart(2, " ")}G   ${String(50 - used).padStart(2, " ")}G  ${percent}% /\n/dev/sdb1       200G  108G   92G  54% /data`;
+    },
+    "free -m": (rack) => {
+      const total = 8192;
+      const used = Math.round(total * rack.metrics.RAM / 100);
+      const free = total - used;
+      return `              total        used        free      shared  buff/cache   available\nMem:           ${total}        ${used}        ${free}         128        1024        ${Math.max(0, free + 512)}\nSwap:          2048         128        1920`;
+    },
+    top: (rack) => {
+      const busy = Math.min(96, rack.metrics.CPU);
+      const idle = Math.max(4, 100 - busy);
+      return `top - 22:20:18 up 47 days, 4:12, 1 user, load average: 0.68, 0.52, 0.40\n%Cpu(s): ${busy.toFixed(1)} us,  2.0 sy,  0.0 ni, ${idle.toFixed(1)} id\nPID   USER   %CPU   %MEM   COMMAND\n938   www    12.4    1.2   nginx\n1102  root    3.1    0.8   node_exporter\n721   root    0.3    0.4   sshd`;
+    },
+    "systemctl status nginx": () => `● nginx.service - A high performance web server\n   Loaded: loaded (/lib/systemd/system/nginx.service; enabled)\n   Active: active (running) since 22:00:08\n Main PID: 938 (nginx)`,
+    "journalctl -u nginx": () => `Aug 08 22:00:08 systemd[1]: Started A high performance web server.\nAug 08 22:00:08 nginx[938]: configuration file /etc/nginx/nginx.conf test is successful\n-- No recent errors --`,
+    "ss -lntp": () => `State   Recv-Q  Send-Q   Local Address:Port   Process\nLISTEN  0       511      0.0.0.0:80          users:((\"nginx\",pid=938,fd=6))\nLISTEN  0       128      0.0.0.0:22          users:((\"sshd\",pid=721,fd=3))`,
+    "ip addr": (rack) => `2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 state UP\n    inet 10.20.${rack.id}.15/24 brd 10.20.${rack.id}.255 scope global eth0\n    link/ether 02:42:ac:14:0${rack.id}:0f`,
+    ping: (rack, command) => {
+      const target = terminalTarget(command, `10.20.${rack.id}.1`);
+      return `PING ${target} (${target}) 56(84) bytes of data.\n64 bytes from ${target}: icmp_seq=1 ttl=63 time=0.${rack.id}8 ms\n64 bytes from ${target}: icmp_seq=2 ttl=63 time=0.${rack.id + 2}1 ms\n--- ${target} ping statistics ---\n2 packets transmitted, 2 received, 0% packet loss`;
+    },
+    curl: (_rack, command) => {
+      const target = terminalTarget(command, "localhost");
+      return `HTTP/1.1 200 OK\nServer: nginx/1.24.0\nContent-Type: text/html\nX-Simulated-Target: ${target}\n\nDC OPS service healthy`;
+    },
+    traceroute: (rack, command) => {
+      const target = terminalTarget(command, `10.20.${rack.id}.1`);
+      return `traceroute to ${target}, 30 hops max\n 1  10.20.${rack.id}.1  0.411 ms  0.390 ms  0.372 ms\n 2  ${target}  0.882 ms  0.851 ms  0.840 ms`;
+    }
+  });
+
+  function getTerminalSession(rack) {
+    if (!rack) return null;
+    return rack.ticket?.terminalHistory ?? rack.terminalHistory;
+  }
+
+  function getTerminalOutput(rack, parsedCommand) {
+    const ticketOutput = rack.ticket?.diagnosticCommands?.[parsedCommand.canonical];
+    if (typeof ticketOutput === "string") return ticketOutput;
+    const outputBuilder = DEFAULT_TERMINAL_OUTPUTS[parsedCommand.canonical];
+    return outputBuilder ? outputBuilder(rack, parsedCommand.normalized) : "";
+  }
+
+  function renderTerminal() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    elements.terminalOutput.innerHTML = "";
+
+    if (!rack) {
+      elements.terminalRackLabel.textContent = "NO RACK SELECTED";
+      elements.terminalPrompt.textContent = "operator@rack--:~$";
+      elements.terminalInput.disabled = true;
+      elements.terminalRunBtn.disabled = true;
+      elements.terminalInput.placeholder = "Rack을 선택하세요";
+      elements.terminalClearBtn.disabled = true;
+      elements.terminalSensor.hidden = true;
+      const message = document.createElement("div");
+      message.className = "terminal-welcome";
+      message.textContent = "Select a Rack to open a safe simulated terminal session.";
+      elements.terminalOutput.append(message);
+      return;
+    }
+
+    const rackNumber = String(rack.id).padStart(2, "0");
+    const prompt = `operator@rack${rackNumber}:~$`;
+    const history = getTerminalSession(rack);
+    elements.terminalRackLabel.textContent = rackLabel(rack.id).toUpperCase();
+    elements.terminalPrompt.textContent = prompt;
+    elements.terminalInput.disabled = false;
+    elements.terminalRunBtn.disabled = false;
+    elements.terminalInput.placeholder = "명령어 입력 (help)";
+    elements.terminalClearBtn.disabled = false;
+
+    const sensorAlert = rack.ticket?.sensorAlert;
+    elements.terminalSensor.hidden = !sensorAlert;
+    elements.terminalSensor.textContent = sensorAlert ?? "";
+
+    if (!history.length) {
+      const message = document.createElement("div");
+      message.className = "terminal-welcome";
+      message.textContent = `Connected to rack${rackNumber}. Type 'help' to list simulated commands.`;
+      elements.terminalOutput.append(message);
+    }
+
+    history.forEach((record) => {
+      const entry = document.createElement("div");
+      const command = document.createElement("div");
+      const promptText = document.createElement("span");
+      const output = document.createElement("pre");
+      entry.className = "terminal-entry";
+      command.className = "terminal-entry-command";
+      promptText.className = "prompt";
+      promptText.textContent = `${record.prompt} `;
+      command.append(promptText, document.createTextNode(record.command));
+      output.className = `terminal-entry-output${record.valid ? "" : " error"}`;
+      output.textContent = record.output;
+      entry.append(command, output);
+      if (record.useful) {
+        const evidence = document.createElement("span");
+        evidence.className = "terminal-evidence";
+        evidence.textContent = "EVIDENCE CAPTURED";
+        entry.append(evidence);
+      }
+      elements.terminalOutput.append(entry);
+    });
+
+    elements.terminalOutput.scrollTop = elements.terminalOutput.scrollHeight;
+  }
+
+  function clearTerminalSession() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const history = getTerminalSession(rack);
+    if (!history) return;
+    history.length = 0;
+    renderTerminal();
+    elements.terminalInput.focus();
+  }
+
+  function executeTerminalCommand(rawCommand) {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    if (!rack) return;
+    const parsed = parseTerminalCommand(rawCommand);
+    if (!parsed.normalized) return;
+
+    if (game.shift.status === "RUNNING") game.stats.commandsExecuted += 1;
+    if (parsed.canonical === "clear") {
+      clearTerminalSession();
+      return;
+    }
+
+    const ticket = rack.ticket;
+    let valid = Boolean(parsed.canonical);
+    let useful = false;
+    let output;
+
+    if (!valid) {
+      const unknownCommand = parsed.normalized.split(" ")[0];
+      output = `command not found: ${unknownCommand}`;
+      if (game.shift.status === "RUNNING") game.stats.invalidCommands += 1;
+    } else {
+      output = getTerminalOutput(rack, parsed);
+      const usefulForIncident = ticket?.usefulCommands?.includes(parsed.canonical);
+      const alreadyCounted = ticket?.countedUsefulCommands?.includes(parsed.canonical);
+      useful = Boolean(usefulForIncident && !alreadyCounted);
+      if (useful) {
+        ticket.countedUsefulCommands.push(parsed.canonical);
+        ticket.investigationEvidence.push(parsed.normalized);
+        if (game.shift.status === "RUNNING" && ticket.countedInShift) {
+          game.stats.usefulCommands += 1;
+        }
+      }
+    }
+
+    getTerminalSession(rack).push({
+      prompt: elements.terminalPrompt.textContent,
+      command: parsed.normalized,
+      output,
+      valid,
+      useful,
+      executedAt: Date.now()
+    });
+    renderTerminal();
+  }
+
+  function handleTerminalSubmit(event) {
+    event.preventDefault();
+    const command = elements.terminalInput.value;
+    elements.terminalInput.value = "";
+    executeTerminalCommand(command);
+    elements.terminalInput.focus();
   }
 
   // ---------------- 화면 그리기 ----------------
@@ -419,6 +681,7 @@
     updateDecisionPanel();
     updateIncidentQueue();
     updateShiftPanel();
+    renderTerminal();
   }
 
   // ---------------- Incident, Diagnosis, Action ----------------
@@ -461,6 +724,9 @@
       actionOptions: null,
       wrongDiagnoses: [],
       wrongActions: [],
+      terminalHistory: [],
+      investigationEvidence: [],
+      countedUsefulCommands: [],
       prematureRecoveryPenalized: false,
       countedInShift,
       previousStatus: rack.status,
@@ -547,6 +813,12 @@
       game.stats.resolvedIncidents += 1;
       game.stats.totalResolutionTime += (ticket.resolvedAt - ticket.createdAt) / 1000;
     }
+    game.incidentHistory.push({
+      ...ticket,
+      terminalHistory: ticket.terminalHistory.map((record) => ({ ...record })),
+      investigationEvidence: [...ticket.investigationEvidence],
+      countedUsefulCommands: [...ticket.countedUsefulCommands]
+    });
     rack.status = ticket.previousStatus ?? "healthy";
     rack.metrics = ticket.previousMetrics ? { ...ticket.previousMetrics } : createNormalMetrics();
     rack.ticket = null;
@@ -674,12 +946,14 @@
       rack.status = initialRackState[index].status;
       rack.metrics = { ...initialRackState[index].metrics };
       rack.ticket = null;
+      rack.terminalHistory.length = 0;
     });
     game.score = 0;
     game.availability = 100;
     game.temperature = 21.4;
     game.selectedId = null;
     game.ticketSequence = 0;
+    game.incidentHistory = [];
     game.stats = createEmptyStats();
     game.shift.status = "IDLE";
     game.shift.startedAt = null;
@@ -727,7 +1001,10 @@
       slaCompliance: Math.max(0, slaCompliance),
       diagnosisAccuracy: percent(stats.correctDiagnoses, diagnosisAttempts),
       actionAccuracy: percent(stats.correctActions, actionAttempts),
-      averageMttr: stats.resolvedIncidents === 0 ? 0 : stats.totalResolutionTime / stats.resolvedIncidents
+      averageMttr: stats.resolvedIncidents === 0 ? 0 : stats.totalResolutionTime / stats.resolvedIncidents,
+      commandsExecuted: stats.commandsExecuted,
+      usefulCommands: stats.usefulCommands,
+      invalidCommands: stats.invalidCommands
     };
   }
 
@@ -754,6 +1031,9 @@
     elements.reportDiagnosisAccuracy.textContent = `${report.diagnosisAccuracy.toFixed(1)}%`;
     elements.reportActionAccuracy.textContent = `${report.actionAccuracy.toFixed(1)}%`;
     elements.reportMttr.textContent = `${report.averageMttr.toFixed(1)}s`;
+    elements.reportCommands.textContent = report.commandsExecuted;
+    elements.reportUsefulCommands.textContent = report.usefulCommands;
+    elements.reportInvalidCommands.textContent = report.invalidCommands;
     elements.reportModal.hidden = false;
   }
 
@@ -855,6 +1135,8 @@
     elements.cancelEndShiftBtn.addEventListener("click", closeEndShiftConfirmation);
     elements.confirmEndShiftBtn.addEventListener("click", confirmManualEndShift);
     elements.newShiftBtn.addEventListener("click", startShift);
+    elements.terminalForm.addEventListener("submit", handleTerminalSubmit);
+    elements.terminalClearBtn.addEventListener("click", clearTerminalSession);
     refreshUI();
     addLog("SYSTEM", "Night Shift 콘솔 준비 완료 - START SHIFT 대기");
     startShiftHeartbeat();
