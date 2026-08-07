@@ -52,7 +52,12 @@
     ticketDiagnosis: document.querySelector("#ticketDiagnosis"),
     ticketDiagnosisText: document.querySelector("#ticketDiagnosisText"),
     ticketRootCause: document.querySelector("#ticketRootCause"),
-    ticketAction: document.querySelector("#ticketAction"),
+    decisionPanel: document.querySelector("#decisionPanel"),
+    decisionStep: document.querySelector("#decisionStep"),
+    decisionTitle: document.querySelector("#decisionTitle"),
+    decisionProgress: document.querySelector("#decisionProgress"),
+    decisionGuide: document.querySelector("#decisionGuide"),
+    decisionOptions: document.querySelector("#decisionOptions"),
     incidentBtn: document.querySelector("#incidentBtn"),
     diagnoseBtn: document.querySelector("#diagnoseBtn"),
     recoverBtn: document.querySelector("#recoverBtn")
@@ -88,6 +93,27 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function shuffle(items) {
+    const result = [...items];
+    for (let index = result.length - 1; index > 0; index -= 1) {
+      const randomIndex = Math.floor(Math.random() * (index + 1));
+      [result[index], result[randomIndex]] = [result[randomIndex], result[index]];
+    }
+    return result;
+  }
+
+  function createChoiceOptions(ticket, valueKey) {
+    const distractors = shuffle(
+      INCIDENTS.filter((incident) => incident.incidentId !== ticket.incidentId)
+    ).slice(0, 2);
+
+    return shuffle([ticket, ...distractors]).map((incident) => ({
+      optionId: `${valueKey}-${incident.incidentId}`,
+      label: incident[valueKey],
+      isCorrect: incident.incidentId === ticket.incidentId
+    }));
   }
 
   // ---------------- 화면 그리기 ----------------
@@ -178,14 +204,54 @@
     elements.ticketContent.hidden = false;
     elements.ticketId.textContent = ticket.ticketId;
     elements.ticketSeverity.textContent = ticket.severity;
-    elements.ticketTitle.textContent = ticket.title;
+    elements.ticketTitle.textContent = rack.diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
     elements.ticketRack.textContent = ticket.affectedRack;
     elements.ticketSla.textContent = formatSla(slaRemaining);
     elements.ticketSymptom.textContent = ticket.symptom;
     elements.ticketDiagnosis.hidden = !rack.diagnosed;
-    elements.ticketDiagnosisText.textContent = ticket.correctDiagnosis;
-    elements.ticketRootCause.textContent = ticket.rootCause;
-    elements.ticketAction.textContent = ticket.correctAction;
+    elements.ticketDiagnosisText.textContent = rack.diagnosed ? ticket.correctDiagnosis : "—";
+    elements.ticketRootCause.textContent = rack.diagnosed ? ticket.rootCause : "—";
+  }
+
+  function updateDecisionPanel() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+
+    if (!ticket || !["diagnosis", "action"].includes(ticket.stage)) {
+      elements.decisionPanel.hidden = true;
+      elements.decisionOptions.innerHTML = "";
+      return;
+    }
+
+    const isDiagnosis = ticket.stage === "diagnosis";
+    const options = isDiagnosis ? ticket.diagnosisOptions : ticket.actionOptions;
+    const attempted = isDiagnosis ? ticket.wrongDiagnoses : ticket.wrongActions;
+
+    elements.decisionPanel.hidden = false;
+    elements.decisionPanel.className = `decision-panel${isDiagnosis ? "" : " action-stage"}`;
+    elements.decisionStep.textContent = isDiagnosis ? "STEP 01 · DIAGNOSIS" : "STEP 02 · ACTION";
+    elements.decisionTitle.textContent = isDiagnosis
+      ? "진단 후보를 선택하세요"
+      : "복구 Action을 선택하세요";
+    elements.decisionProgress.textContent = isDiagnosis ? "1 / 2" : "2 / 2";
+    elements.decisionGuide.textContent = isDiagnosis
+      ? "증상과 모니터링 수치를 근거로 판단하세요."
+      : "공개된 Root Cause에 맞는 조치를 선택하세요.";
+    elements.decisionOptions.setAttribute(
+      "aria-label",
+      isDiagnosis ? "Diagnosis 후보" : "Action 후보"
+    );
+    elements.decisionOptions.innerHTML = options.map((option, index) => {
+      const wasWrong = attempted.includes(option.optionId);
+      return `
+        <button class="decision-option${wasWrong ? " wrong" : ""}" type="button"
+                data-kind="${isDiagnosis ? "diagnosis" : "action"}"
+                data-option-id="${option.optionId}" data-letter="${String.fromCharCode(65 + index)}"
+                aria-label="${escapeHtml(option.label)}"
+                ${wasWrong ? "disabled" : ""}>
+          ${escapeHtml(option.label)}
+        </button>`;
+    }).join("");
   }
 
   function recalculateTemperature() {
@@ -201,6 +267,7 @@
     renderRacks(focusSelected);
     updateDashboard();
     updateTicketPanel();
+    updateDecisionPanel();
   }
 
   // ---------------- 게임 행동과 규칙 ----------------
@@ -231,7 +298,13 @@
       ticketId,
       createdAt,
       slaDeadline: createdAt + incident.slaSeconds * 1000,
-      slaBreached: false
+      slaBreached: false,
+      stage: "reported",
+      diagnosisOptions: null,
+      actionOptions: null,
+      wrongDiagnoses: [],
+      wrongActions: [],
+      prematureRecoveryPenalized: false
     };
     rack.metrics = {
       CPU: incident.cpu,
@@ -246,9 +319,9 @@
 
     addLog(
       "ALERT",
-      `${ticketId} - ${rackLabel(rack.id)} Critical / ${incident.title} (SLA ${incident.slaSeconds}s)`
+      `${ticketId} - ${rackLabel(rack.id)} Critical / ${incident.symptom} (SLA ${incident.slaSeconds}s)`
     );
-    showToast(`${ticketId}: ${rackLabel(rack.id)}에 ${incident.title} 발생`, "error");
+    showToast(`${ticketId}: ${rackLabel(rack.id)}에 Critical Incident 발생`, "error");
     refreshUI();
   }
 
@@ -264,11 +337,6 @@
       addLog("WARNING", `${rackLabel(rack.id)} 진단 불필요 - Critical 아님`);
       return;
     }
-    if (rack.diagnosed) {
-      showToast("이미 진단을 완료했습니다. 이제 복구하세요.");
-      return;
-    }
-
     const incident = getIncident(rack);
     if (!incident) {
       showToast("장애 정보를 찾을 수 없습니다.", "error");
@@ -276,9 +344,21 @@
       return;
     }
 
-    rack.diagnosed = true;
-    addLog("DIAG", `${incident.ticketId} - ${rackLabel(rack.id)} / ${incident.correctDiagnosis}`);
-    showToast(`진단 완료: ${incident.correctDiagnosis}`);
+    if (incident.stage === "action") {
+      showToast("진단 완료 상태입니다. 올바른 Action을 선택하세요.");
+      updateDecisionPanel();
+      return;
+    }
+    if (incident.stage === "diagnosis") {
+      showToast("진단이 진행 중입니다. 후보 중 하나를 선택하세요.");
+      updateDecisionPanel();
+      return;
+    }
+
+    incident.stage = "diagnosis";
+    incident.diagnosisOptions = createChoiceOptions(incident, "correctDiagnosis");
+    addLog("DIAG", `${rackLabel(rack.id)} diagnosis started`);
+    showToast("진단 후보가 준비되었습니다. 증상과 수치를 확인하세요.");
     refreshUI();
   }
 
@@ -294,15 +374,30 @@
       addLog("WARNING", `${rackLabel(rack.id)} 복구 불필요 - 정상 운영 중`);
       return;
     }
+    if (!rack.ticket) {
+      showToast("선택한 Rack의 Ticket 정보를 찾을 수 없습니다.", "error");
+      addLog("WARNING", `${rackLabel(rack.id)} 복구 실패 - Ticket 데이터 없음`);
+      return;
+    }
     if (!rack.diagnosed) {
-      game.score -= 30;
-      elements.scoreTrend.textContent = "절차 위반 -30 PTS";
-      addLog("WARNING", `${rack.ticket.ticketId} - ${rackLabel(rack.id)} 미진단 복구 거부 / 30점 감점`);
-      showToast("경고: 진단 없이 복구할 수 없습니다. -30점", "error");
+      if (!rack.ticket.prematureRecoveryPenalized) {
+        rack.ticket.prematureRecoveryPenalized = true;
+        game.score -= 30;
+        elements.scoreTrend.textContent = "절차 위반 -30 PTS";
+        addLog("WARNING", `${rack.ticket.ticketId} - ${rackLabel(rack.id)} 미진단 복구 거부 / 30점 감점`);
+        showToast("경고: 진단 없이 복구할 수 없습니다. -30점", "error");
+      } else {
+        showToast("이미 감점된 요청입니다. 먼저 Diagnosis를 완료하세요.", "error");
+      }
       updateDashboard();
       return;
     }
 
+    showToast("자동 복구는 비활성화되었습니다. 올바른 Action을 선택하세요.");
+    updateDecisionPanel();
+  }
+
+  function resolveIncident(rack) {
     const resolvedTicket = rack.ticket;
     rack.status = "healthy";
     rack.diagnosed = false;
@@ -314,10 +409,52 @@
     elements.scoreTrend.textContent = `복구 성공 +${resolvedTicket.score} PTS`;
     addLog(
       "RECOVERY",
-      `${resolvedTicket.ticketId} - ${rackLabel(rack.id)} / ${resolvedTicket.correctAction} +${resolvedTicket.score} PTS`
+      `${rackLabel(rack.id)} restored / ${resolvedTicket.ticketId} +${resolvedTicket.score} PTS`
     );
     showToast(`서비스가 정상 복구되었습니다. +${resolvedTicket.score}점`, "success");
     refreshUI();
+  }
+
+  function handleDecisionSelection(event) {
+    const optionButton = event.target.closest("[data-option-id]");
+    if (!optionButton || optionButton.disabled) return;
+
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+    if (!ticket || rack.status !== "critical") return;
+
+    const isDiagnosis = optionButton.dataset.kind === "diagnosis";
+    const expectedStage = isDiagnosis ? "diagnosis" : "action";
+    if (ticket.stage !== expectedStage) return;
+
+    const options = isDiagnosis ? ticket.diagnosisOptions : ticket.actionOptions;
+    const attempted = isDiagnosis ? ticket.wrongDiagnoses : ticket.wrongActions;
+    const option = options.find((item) => item.optionId === optionButton.dataset.optionId);
+    if (!option || attempted.includes(option.optionId)) return;
+
+    if (!option.isCorrect) {
+      attempted.push(option.optionId);
+      const penalty = isDiagnosis ? 10 : 20;
+      game.score -= penalty;
+      elements.scoreTrend.textContent = `${isDiagnosis ? "오진" : "잘못된 조치"} -${penalty} PTS`;
+      addLog(isDiagnosis ? "WRONG DIAG" : "WRONG ACTION", option.label);
+      showToast(`${isDiagnosis ? "잘못된 Diagnosis" : "잘못된 Action"}입니다. -${penalty}점`, "error");
+      updateDashboard();
+      updateDecisionPanel();
+      return;
+    }
+
+    if (isDiagnosis) {
+      rack.diagnosed = true;
+      ticket.stage = "action";
+      ticket.actionOptions = createChoiceOptions(ticket, "correctAction");
+      addLog("DIAG OK", ticket.correctDiagnosis);
+      showToast("정확한 진단입니다. Root Cause를 확인하고 Action을 선택하세요.", "success");
+      refreshUI();
+      return;
+    }
+
+    resolveIncident(rack);
   }
 
   // ---------------- 로그와 알림 ----------------
@@ -357,7 +494,7 @@
 
     entry.className = "log-entry";
     time.className = "log-time";
-    logType.className = `log-type ${type.toLowerCase()}`;
+    logType.className = `log-type ${type.toLowerCase().replaceAll(" ", "-")}`;
     logMessage.className = "log-message";
     time.textContent = currentTime();
     logType.textContent = type;
@@ -388,6 +525,7 @@
     elements.incidentBtn.addEventListener("click", triggerIncident);
     elements.diagnoseBtn.addEventListener("click", diagnoseSelected);
     elements.recoverBtn.addEventListener("click", recoverSelected);
+    elements.decisionOptions.addEventListener("click", handleDecisionSelection);
 
     refreshUI();
     addLog("SYSTEM", "Night Shift 콘솔 준비 완료 - 전체 시스템 모니터링 시작");

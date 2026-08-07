@@ -81,7 +81,7 @@
                 <span class="ticket-id" id="ticketId">TKT-0000</span>
                 <span class="ticket-severity" id="ticketSeverity">Critical</span>
               </div>
-              <h3 id="ticketTitle">Incident Title</h3>
+              <h3 id="ticketTitle">UNIDENTIFIED INCIDENT</h3>
               <div class="ticket-summary">
                 <div><small>AFFECTED RACK</small><strong id="ticketRack">—</strong></div>
                 <div><small>SLA REMAINING</small><strong class="sla-time" id="ticketSla">00:00</strong></div>
@@ -91,17 +91,27 @@
                 <div class="diagnosis-result" id="ticketDiagnosis" hidden>
                   <dt>진단 · DIAGNOSIS</dt><dd id="ticketDiagnosisText">—</dd>
                   <dt>원인 · ROOT CAUSE</dt><dd id="ticketRootCause">—</dd>
-                  <dt>조치 · CORRECT ACTION</dt><dd id="ticketAction">—</dd>
                 </div>
               </dl>
             </div>
           </article>
+          <section class="decision-panel" id="decisionPanel" aria-live="polite" hidden>
+            <div class="decision-heading">
+              <div>
+                <small id="decisionStep">STEP 01 · DIAGNOSIS</small>
+                <h3 id="decisionTitle">진단 후보를 선택하세요</h3>
+              </div>
+              <span id="decisionProgress">1 / 2</span>
+            </div>
+            <p id="decisionGuide">증상과 모니터링 수치를 근거로 판단하세요.</p>
+            <div class="decision-options" id="decisionOptions" role="group" aria-label="대응 후보"></div>
+          </section>
           <div class="buttons">
             <button class="action-btn incident" id="incidentBtn" type="button">⚠ 장애 발생 · TRIGGER INCIDENT</button>
             <button class="action-btn diagnose" id="diagnoseBtn" type="button">진단 · DIAGNOSE</button>
             <button class="action-btn recover" id="recoverBtn" type="button">복구 · RECOVER</button>
           </div>
-          <p class="hint">운영 절차: Critical Rack 선택 → 진단 → 복구</p>
+          <p class="hint">운영 절차: Critical Rack 선택 → 진단 후보 선택 → Action 선택</p>
         </section>
 
         <section class="log-panel">
