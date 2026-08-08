@@ -1,7 +1,7 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.8 설정 ----------------
+  // ---------------- v0.9 설정 ----------------
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -91,6 +91,8 @@
     ? window.DCOpsData.incidents
     : [];
   const Analytics = window.DCOpsAnalytics;
+  const Storage = window.DCOpsStorage;
+  const initialArchive = Storage.loadArchive();
 
   function randomBetween(min, max) {
     return Math.round(min + Math.random() * (max - min));
@@ -146,16 +148,23 @@
     incidentHistory: [],
     historyFilters: { category: "ALL", sla: "ALL" },
     selectedHistoryTicketId: null,
+    archive: initialArchive,
+    archiveFilters: { difficulty: "ALL", grade: "ALL" },
+    selectedArchiveShiftId: null,
+    selectedArchiveIncidentTicketId: null,
+    archiveConfirmAction: null,
     selectedDifficulty: "NORMAL",
     stats: createEmptyStats(),
     shift: {
       status: "IDLE",
       difficulty: null,
       startedAt: null,
+      endedAt: null,
       endsAt: null,
       remainingSeconds: SHIFT_CONFIG.durationSeconds,
       autoIncidentTimerId: null,
-      heartbeatIntervalId: null
+      heartbeatIntervalId: null,
+      archived: false
     }
   };
 
@@ -246,6 +255,26 @@
     historyDetail: document.querySelector("#historyDetail"),
     historyDetailEmpty: document.querySelector("#historyDetailEmpty"),
     historyDetailContent: document.querySelector("#historyDetailContent"),
+    archiveOpenBtn: document.querySelector("#archiveOpenBtn"),
+    archiveButtonCount: document.querySelector("#archiveButtonCount"),
+    archiveModal: document.querySelector("#archiveModal"),
+    archiveCloseBtn: document.querySelector("#archiveCloseBtn"),
+    archiveClearBtn: document.querySelector("#archiveClearBtn"),
+    archiveNotice: document.querySelector("#archiveNotice"),
+    archiveDifficultyFilters: document.querySelector("#archiveDifficultyFilters"),
+    archiveGradeFilters: document.querySelector("#archiveGradeFilters"),
+    archivePersonalBest: document.querySelector("#archivePersonalBest"),
+    archiveList: document.querySelector("#archiveList"),
+    archiveEmpty: document.querySelector("#archiveEmpty"),
+    archiveResultCount: document.querySelector("#archiveResultCount"),
+    archiveDetail: document.querySelector("#archiveDetail"),
+    archiveDetailEmpty: document.querySelector("#archiveDetailEmpty"),
+    archiveDetailContent: document.querySelector("#archiveDetailContent"),
+    archiveConfirmModal: document.querySelector("#archiveConfirmModal"),
+    archiveConfirmTitle: document.querySelector("#archiveConfirmTitle"),
+    archiveConfirmDescription: document.querySelector("#archiveConfirmDescription"),
+    archiveConfirmCancelBtn: document.querySelector("#archiveConfirmCancelBtn"),
+    archiveConfirmActionBtn: document.querySelector("#archiveConfirmActionBtn"),
     terminalRackLabel: document.querySelector("#terminalRackLabel"),
     terminalSensor: document.querySelector("#terminalSensor"),
     terminalOutput: document.querySelector("#terminalOutput"),
@@ -877,14 +906,8 @@ TERMINAL
     return labels[event.type] ?? event.type.replaceAll("_", " ");
   }
 
-  function renderHistoryDetail(ticket) {
-    elements.historyDetailEmpty.hidden = Boolean(ticket);
-    elements.historyDetailContent.hidden = !ticket;
-    if (!ticket) {
-      elements.historyDetailContent.innerHTML = "";
-      return;
-    }
-
+  function buildIncidentDetailMarkup(ticket) {
+    if (!ticket) return "";
     const report = Analytics.buildIncidentReport(ticket);
     const summary = report.summary;
     const investigation = report.investigation;
@@ -908,7 +931,7 @@ TERMINAL
       }).join("")
       : '<li class="timeline-empty">NO TIMELINE EVENTS</li>';
 
-    elements.historyDetailContent.innerHTML = `
+    return `
       <header class="incident-report-heading">
         <div><span>${escapeHtml(summary.ticketId)}</span><h3>${escapeHtml(summary.title)}</h3></div>
         <span class="history-sla ${ticket.slaBreached ? "breached" : "met"}">${escapeHtml(summary.slaResult)}</span>
@@ -957,6 +980,12 @@ TERMINAL
           <li><strong>Lessons Learned</strong><p>${escapeHtml(report.rca.lessonsLearned)}</p></li>
         </ol>
       </section>`;
+  }
+
+  function renderHistoryDetail(ticket) {
+    elements.historyDetailEmpty.hidden = Boolean(ticket);
+    elements.historyDetailContent.hidden = !ticket;
+    elements.historyDetailContent.innerHTML = buildIncidentDetailMarkup(ticket);
   }
 
   function renderHistory() {
@@ -1027,6 +1056,254 @@ TERMINAL
     elements.historyDetail.scrollTop = 0;
   }
 
+  function formatArchiveDate(timestamp, includeTime = false) {
+    if (!Number.isFinite(Number(timestamp))) return "—";
+    return new Intl.DateTimeFormat("ko-KR", includeTime
+      ? { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }
+      : { year: "numeric", month: "2-digit", day: "2-digit" }
+    ).format(new Date(Number(timestamp)));
+  }
+
+  function setArchiveNotice(message = "", kind = "") {
+    elements.archiveNotice.hidden = !message;
+    elements.archiveNotice.textContent = message;
+    elements.archiveNotice.className = `archive-notice${kind ? ` ${kind}` : ""}`;
+  }
+
+  function getFilteredArchive() {
+    return Analytics.filterArchivedShifts(
+      game.archive.shifts,
+      game.archiveFilters.difficulty,
+      game.archiveFilters.grade
+    );
+  }
+
+  function renderArchiveFilters() {
+    elements.archiveDifficultyFilters.querySelectorAll("[data-archive-difficulty]").forEach((button) => {
+      const selected = button.dataset.archiveDifficulty === game.archiveFilters.difficulty;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    elements.archiveGradeFilters.querySelectorAll("[data-archive-grade]").forEach((button) => {
+      const selected = button.dataset.archiveGrade === game.archiveFilters.grade;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
+
+  function renderPersonalBest() {
+    const best = Analytics.calculatePersonalBest(game.archive.shifts);
+    if (!best) {
+      elements.archivePersonalBest.innerHTML = "";
+      elements.archivePersonalBest.hidden = true;
+      return;
+    }
+    elements.archivePersonalBest.hidden = false;
+    elements.archivePersonalBest.innerHTML = `
+      <div class="personal-best-heading"><p class="eyebrow">THIS BROWSER'S SIMULATION RECORDS</p><h3 id="personalBestTitle">PERSONAL BEST</h3></div>
+      <div><small>HIGHEST SCORE</small><strong>${best.highestScore.finalScore} PTS</strong><span>${escapeHtml(best.highestScore.shiftId)}</span></div>
+      <div><small>BEST SLA COMPLIANCE</small><strong>${best.bestSla.slaCompliance.toFixed(1)}%</strong><span>${escapeHtml(best.bestSla.shiftId)}</span></div>
+      <div><small>FASTEST AVG MTTR</small><strong>${best.fastestMttr ? Analytics.formatDuration(best.fastestMttr.averageMttr) : "N/A"}</strong><span>${best.fastestMttr ? escapeHtml(best.fastestMttr.shiftId) : "NO RESOLVED INCIDENTS"}</span></div>`;
+  }
+
+  function renderComparison(shift) {
+    const sorted = Analytics.sortArchivedShifts(game.archive.shifts);
+    const index = sorted.findIndex((record) => record.shiftId === shift.shiftId);
+    const previous = index >= 0 ? sorted[index + 1] : null;
+    const comparison = Analytics.compareShifts(shift, previous);
+    if (!comparison) return `<section class="archive-section"><h4>PREVIOUS SHIFT COMPARISON</h4><p class="archive-muted">이전 Shift 기록이 없어 비교할 수 없습니다.</p></section>`;
+    const items = comparison.map((metric) => {
+      const digits = metric.label === "Score" ? 0 : 1;
+      const sign = metric.delta > 0 ? "+" : "";
+      const directionHint = metric.lowerIsBetter ? "lower is better" : "higher is better";
+      return `<div class="comparison-item ${metric.status.toLowerCase()}">
+        <small>${escapeHtml(metric.label)} · ${directionHint}</small>
+        <strong>${sign}${metric.delta.toFixed(digits)}${metric.suffix}</strong>
+        <span>${metric.status}</span>
+      </div>`;
+    }).join("");
+    return `<section class="archive-section"><h4>PREVIOUS SHIFT COMPARISON</h4><p class="archive-muted">${escapeHtml(previous.shiftId)} 대비</p><div class="comparison-grid">${items}</div></section>`;
+  }
+
+  function renderArchiveShiftDetail(shift) {
+    elements.archiveDetailEmpty.hidden = Boolean(shift);
+    elements.archiveDetailContent.hidden = !shift;
+    if (!shift) {
+      elements.archiveDetailContent.innerHTML = "";
+      return;
+    }
+
+    if (game.selectedArchiveIncidentTicketId) {
+      const incident = shift.incidentHistory.find((ticket) => ticket.ticketId === game.selectedArchiveIncidentTicketId);
+      if (incident) {
+        elements.archiveDetailContent.innerHTML = `<button class="archive-back-btn" type="button" data-archive-back-to-shift>← BACK TO ${escapeHtml(shift.shiftId)}</button>${buildIncidentDetailMarkup(incident)}`;
+        return;
+      }
+      game.selectedArchiveIncidentTicketId = null;
+    }
+
+    const categoryCards = shift.categoryAnalytics.map((category) => `
+      <article class="category-performance-card category-${category.category.toLowerCase()}">
+        <h4>${escapeHtml(category.category)}</h4>
+        <strong>${category.resolved} / ${category.generated} Resolved</strong>
+        <span>${category.slaBreached} SLA Breached</span>
+        <span>SLA ${category.slaCompliance === null ? "N/A" : `${category.slaCompliance.toFixed(1)}%`}</span>
+        <span>Avg MTTR ${Analytics.formatDuration(category.averageMttr)}</span>
+      </article>`).join("");
+    const operator = shift.operatorSummary;
+    const operatorList = (items, empty) => items.length
+      ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : `<p>${empty}</p>`;
+    const resolvedItems = shift.incidentHistory.length
+      ? shift.incidentHistory.map((ticket) => `<button class="archive-incident-item" type="button" data-archive-incident-id="${escapeHtml(ticket.ticketId)}">
+        <span><strong>${escapeHtml(ticket.ticketId)}</strong><b class="queue-category category-${ticket.category.toLowerCase()}">${escapeHtml(ticket.category)}</b><i>${escapeHtml(ticket.severity)}</i></span>
+        <em>${escapeHtml(ticket.title)}</em><small>${escapeHtml(ticket.affectedRack)} · ${Analytics.getSlaResult(ticket)} · MTTR ${Analytics.formatDuration(Analytics.getMttrSeconds(ticket))}</small>
+      </button>`).join("")
+      : `<p class="archive-muted">NO RESOLVED INCIDENTS</p>`;
+    const unresolvedItems = shift.unresolvedTickets.length
+      ? shift.unresolvedTickets.map((ticket) => `<li><span><strong>${escapeHtml(ticket.ticketId)}</strong> <b class="queue-category category-${ticket.category.toLowerCase()}">${escapeHtml(ticket.category)}</b> ${escapeHtml(ticket.severity)}</span><em>${escapeHtml(ticket.title)}</em><small>${escapeHtml(ticket.affectedRack)} · ${ticket.slaBreached ? "SLA BREACHED" : "SLA OPEN"} · ${escapeHtml(ticket.stage.toUpperCase())}</small></li>`).join("")
+      : `<li class="archive-muted">ALL GENERATED INCIDENTS RESOLVED</li>`;
+    const investigationCoverage = shift.investigationCoverage === null ? "OPTIONAL / N/A" : `${shift.investigationCoverage.toFixed(1)}%`;
+
+    elements.archiveDetailContent.innerHTML = `
+      <header class="archive-record-heading">
+        <div><span>${escapeHtml(shift.shiftId)}</span><h3>${formatArchiveDate(shift.endedAt)} · ${escapeHtml(shift.difficulty)}</h3></div>
+        <div><strong>GRADE ${escapeHtml(shift.grade)}</strong><button class="archive-delete-btn" type="button" data-delete-shift-id="${escapeHtml(shift.shiftId)}">DELETE SHIFT</button></div>
+      </header>
+      <section class="archive-summary-grid">
+        <div><small>STARTED</small><strong>${formatArchiveDate(shift.startedAt, true)}</strong></div>
+        <div><small>ENDED</small><strong>${formatArchiveDate(shift.endedAt, true)}</strong></div>
+        <div><small>DURATION</small><strong>${Analytics.formatDuration(shift.durationSeconds)}</strong></div>
+        <div><small>END REASON</small><strong>${escapeHtml(shift.endReason)}</strong></div>
+        <div><small>FINAL SCORE</small><strong>${shift.finalScore} PTS</strong></div>
+        <div><small>AVAILABILITY</small><strong>${shift.availability.toFixed(2)}%</strong></div>
+      </section>
+      <section class="archive-section"><h4>OPERATIONS</h4><div class="archive-metric-grid">
+        <div><small>GENERATED</small><strong>${shift.incidentsGenerated}</strong></div><div><small>RESOLVED</small><strong>${shift.incidentsResolved}</strong></div>
+        <div><small>UNRESOLVED</small><strong>${shift.unresolvedCount}</strong></div><div><small>SLA BREACHED</small><strong>${shift.slaBreaches}</strong></div>
+        <div><small>SLA COMPLIANCE</small><strong>${shift.slaCompliance.toFixed(1)}%</strong></div><div><small>AVERAGE MTTR</small><strong>${Analytics.formatDuration(shift.averageMttr)}</strong></div>
+      </div></section>
+      <section class="archive-section split-archive-section">
+        <div><h4>ACCURACY</h4><p>Diagnosis <strong>${shift.diagnosisAccuracy.toFixed(1)}%</strong></p><p>Action <strong>${shift.actionAccuracy.toFixed(1)}%</strong></p></div>
+        <div><h4>INVESTIGATION</h4><p>Commands <strong>${shift.commandsExecuted}</strong> · Useful <strong>${shift.usefulCommands}</strong> · Invalid <strong>${shift.invalidCommands}</strong></p><p>Coverage <strong>${investigationCoverage}</strong></p></div>
+      </section>
+      <section class="archive-section"><h4>CATEGORY PERFORMANCE</h4><div class="category-performance">${categoryCards}</div></section>
+      <section class="archive-section"><h4>OPERATOR SUMMARY</h4><div class="operator-summary"><div><strong>STRONG</strong>${operatorList(operator.strong, "No standout metric")}</div><div><strong>NEEDS IMPROVEMENT</strong>${operatorList(operator.needsImprovement, "No metric below threshold")}</div><small>${escapeHtml(operator.note)}</small></div></section>
+      ${renderComparison(shift)}
+      <section class="archive-section"><h4>RESOLVED INCIDENT RECORDS</h4><div class="archive-incident-list">${resolvedItems}</div></section>
+      <section class="archive-section unresolved-section"><h4>UNRESOLVED AT SHIFT END</h4><ul>${unresolvedItems}</ul></section>`;
+  }
+
+  function renderArchive() {
+    const records = getFilteredArchive();
+    elements.archiveButtonCount.textContent = game.archive.shifts.length;
+    elements.archiveResultCount.textContent = `${records.length} RECORD${records.length === 1 ? "" : "S"}`;
+    elements.archiveEmpty.hidden = records.length > 0;
+    elements.archiveClearBtn.disabled = game.archive.shifts.length === 0;
+    renderArchiveFilters();
+    renderPersonalBest();
+    if (!records.some((shift) => shift.shiftId === game.selectedArchiveShiftId)) {
+      game.selectedArchiveShiftId = records[0]?.shiftId ?? null;
+      game.selectedArchiveIncidentTicketId = null;
+    }
+    elements.archiveList.innerHTML = records.map((shift) => {
+      const selected = shift.shiftId === game.selectedArchiveShiftId;
+      return `<button class="archive-item${selected ? " selected" : ""}" type="button" data-archive-shift-id="${escapeHtml(shift.shiftId)}" aria-pressed="${selected}">
+        <span><strong>${escapeHtml(shift.shiftId)}</strong><b>GRADE ${escapeHtml(shift.grade)}</b></span>
+        <em>${formatArchiveDate(shift.endedAt)} · ${escapeHtml(shift.difficulty)}</em>
+        <small>${shift.incidentsResolved} / ${shift.incidentsGenerated} Resolved · SLA ${shift.slaCompliance.toFixed(1)}%</small>
+        <small>MTTR ${Analytics.formatDuration(shift.averageMttr)} · Score ${shift.finalScore}</small>
+      </button>`;
+    }).join("");
+    const selected = records.find((shift) => shift.shiftId === game.selectedArchiveShiftId) ?? null;
+    renderArchiveShiftDetail(selected);
+  }
+
+  function openArchive() {
+    game.archive = Storage.loadArchive();
+    if (game.archive.warnings?.length) setArchiveNotice("일부 저장 기록을 읽지 못해 안전하게 제외했습니다.", "warning");
+    else if (!game.archive.storageAvailable) setArchiveNotice("LocalStorage를 사용할 수 없어 Archive가 저장되지 않습니다.", "warning");
+    else setArchiveNotice();
+    renderArchive();
+    elements.archiveModal.hidden = false;
+    elements.archiveCloseBtn.focus();
+  }
+
+  function closeArchive() {
+    elements.archiveModal.hidden = true;
+    game.selectedArchiveIncidentTicketId = null;
+    elements.archiveOpenBtn.focus();
+  }
+
+  function handleArchiveFilter(event) {
+    const difficulty = event.target.closest("[data-archive-difficulty]");
+    const grade = event.target.closest("[data-archive-grade]");
+    if (!difficulty && !grade) return;
+    if (difficulty) game.archiveFilters.difficulty = difficulty.dataset.archiveDifficulty;
+    if (grade) game.archiveFilters.grade = grade.dataset.archiveGrade;
+    game.selectedArchiveShiftId = null;
+    game.selectedArchiveIncidentTicketId = null;
+    renderArchive();
+  }
+
+  function handleArchiveSelection(event) {
+    const shiftButton = event.target.closest("[data-archive-shift-id]");
+    const incidentButton = event.target.closest("[data-archive-incident-id]");
+    const backButton = event.target.closest("[data-archive-back-to-shift]");
+    const deleteButton = event.target.closest("[data-delete-shift-id]");
+    if (shiftButton) {
+      game.selectedArchiveShiftId = shiftButton.dataset.archiveShiftId;
+      game.selectedArchiveIncidentTicketId = null;
+      renderArchive();
+    } else if (incidentButton) {
+      game.selectedArchiveIncidentTicketId = incidentButton.dataset.archiveIncidentId;
+      renderArchive();
+      elements.archiveDetail.scrollTop = 0;
+    } else if (backButton) {
+      game.selectedArchiveIncidentTicketId = null;
+      renderArchive();
+    } else if (deleteButton) {
+      openArchiveConfirmation("delete", deleteButton.dataset.deleteShiftId);
+    }
+  }
+
+  function openArchiveConfirmation(action, shiftId = null) {
+    game.archiveConfirmAction = { action, shiftId };
+    const clear = action === "clear";
+    elements.archiveConfirmTitle.textContent = clear ? "CLEAR ALL ARCHIVE RECORDS?" : `DELETE ${shiftId}?`;
+    elements.archiveConfirmDescription.textContent = clear
+      ? "이 브라우저에 저장된 모든 완료 Shift 기록을 삭제합니다. 현재 Shift에는 영향을 주지 않습니다."
+      : "선택한 완료 Shift Snapshot만 삭제합니다. 현재 Shift에는 영향을 주지 않습니다.";
+    elements.archiveConfirmActionBtn.textContent = clear ? "전체 삭제 · CLEAR ALL" : "삭제 · DELETE";
+    elements.archiveConfirmModal.hidden = false;
+    elements.archiveConfirmCancelBtn.focus();
+  }
+
+  function closeArchiveConfirmation() {
+    elements.archiveConfirmModal.hidden = true;
+    game.archiveConfirmAction = null;
+    elements.archiveCloseBtn.focus();
+  }
+
+  function confirmArchiveAction() {
+    const pending = game.archiveConfirmAction;
+    if (!pending) return;
+    const result = pending.action === "clear"
+      ? Storage.clearArchive()
+      : Storage.deleteShiftRecord(pending.shiftId);
+    elements.archiveConfirmModal.hidden = true;
+    game.archiveConfirmAction = null;
+    if (!result.ok) {
+      setArchiveNotice(result.reason ?? "Archive 작업을 완료하지 못했습니다.", "warning");
+      return;
+    }
+    game.archive = result.archive;
+    game.selectedArchiveShiftId = null;
+    game.selectedArchiveIncidentTicketId = null;
+    setArchiveNotice(pending.action === "clear" ? "모든 Archive 기록을 삭제했습니다." : `${pending.shiftId} 기록을 삭제했습니다.`, "success");
+    renderArchive();
+  }
+
   function updateShiftPanel() {
     const shift = game.shift;
     const statusClass = shift.status.toLowerCase();
@@ -1082,7 +1359,9 @@ TERMINAL
     updateShiftPanel();
     renderTerminal();
     elements.historyButtonCount.textContent = game.incidentHistory.length;
+    elements.archiveButtonCount.textContent = game.archive.shifts.length;
     if (!elements.historyModal.hidden) renderHistory();
+    if (!elements.archiveModal.hidden) renderArchive();
   }
 
   // ---------------- Incident, Diagnosis, Action ----------------
@@ -1396,8 +1675,10 @@ TERMINAL
     game.shift.status = "IDLE";
     game.shift.difficulty = null;
     game.shift.startedAt = null;
+    game.shift.endedAt = null;
     game.shift.endsAt = null;
     game.shift.remainingSeconds = SHIFT_CONFIG.durationSeconds;
+    game.shift.archived = false;
     elements.eventLog.innerHTML = "";
     elements.scoreTrend.textContent = "복구 시 +100 PTS";
     elements.endShiftConfirmModal.hidden = true;
@@ -1417,6 +1698,7 @@ TERMINAL
     game.shift.status = "RUNNING";
     game.shift.difficulty = selectedDifficulty;
     game.shift.startedAt = startedAt;
+    game.shift.endedAt = null;
     game.shift.endsAt = startedAt + SHIFT_CONFIG.durationSeconds * 1000;
     game.shift.remainingSeconds = SHIFT_CONFIG.durationSeconds;
     elements.scoreTrend.textContent = "교대 운영 중";
@@ -1486,9 +1768,8 @@ TERMINAL
     return GRADE_CONFIG.thresholds.find((rule) => performance >= rule.minimum)?.grade ?? "F";
   }
 
-  function showShiftReport() {
-    const report = calculateShiftReport();
-    elements.reportGrade.textContent = calculateGrade(report);
+  function showShiftReport(report = calculateShiftReport(), grade = calculateGrade(report)) {
+    elements.reportGrade.textContent = grade;
     elements.reportScore.textContent = `${report.score} PTS`;
     elements.reportGenerated.textContent = report.generated;
     elements.reportResolved.textContent = report.resolved;
@@ -1527,10 +1808,39 @@ TERMINAL
     elements.reportModal.hidden = false;
   }
 
+  function archiveCompletedShift(report, grade, endReason) {
+    if (game.shift.archived) return true;
+    const operatorSummary = Analytics.buildOperatorSummary(report);
+    const unresolvedTickets = racks.map((rack) => rack.ticket).filter((ticket) => ticket?.countedInShift);
+    const snapshot = Analytics.createShiftSnapshot({
+      shift: game.shift,
+      report,
+      grade,
+      availability: game.availability,
+      incidentHistory: game.incidentHistory.filter((ticket) => ticket.countedInShift),
+      unresolvedTickets,
+      endReason,
+      operatorSummary
+    });
+    const result = Storage.addShiftRecord(snapshot);
+    if (!result.ok) {
+      setArchiveNotice(result.reason ?? "Shift Archive 저장에 실패했습니다.", "warning");
+      showToast("Shift Report는 완료됐지만 Archive 저장에 실패했습니다.", "error");
+      addLog("WARNING", `Shift archive failed / ${result.reason ?? "unknown error"}`);
+      return false;
+    }
+    game.archive = result.archive;
+    game.shift.archived = true;
+    elements.archiveButtonCount.textContent = game.archive.shifts.length;
+    addLog("ARCHIVE", `${result.record.shiftId} saved to LocalStorage`);
+    return true;
+  }
+
   function endShift(reason = "automatic") {
     if (game.shift.status !== "RUNNING") return;
     updateSlaTimers();
     game.shift.status = "ENDED";
+    game.shift.endedAt = Date.now();
     game.shift.remainingSeconds = 0;
     clearShiftTimers();
     elements.endShiftConfirmModal.hidden = true;
@@ -1541,7 +1851,10 @@ TERMINAL
     const endReason = reason === "manual" ? "Manual termination" : "Automatic time limit";
     addLog("SHIFT END", `${endReason} / ${game.stats.unresolvedIncidents} unresolved`);
     refreshUI();
-    showShiftReport();
+    const report = calculateShiftReport();
+    const grade = calculateGrade(report);
+    archiveCompletedShift(report, grade, endReason);
+    showShiftReport(report, grade);
   }
 
   function openEndShiftConfirmation() {
@@ -1627,11 +1940,19 @@ TERMINAL
 
   function handleModalKeydown(event) {
     if (event.key !== "Escape") return;
+    if (!elements.archiveConfirmModal.hidden) {
+      closeArchiveConfirmation();
+      return;
+    }
     if (!elements.endShiftConfirmModal.hidden) {
       closeEndShiftConfirmation();
       return;
     }
-    if (!elements.historyModal.hidden) closeHistory();
+    if (!elements.historyModal.hidden) {
+      closeHistory();
+      return;
+    }
+    if (!elements.archiveModal.hidden) closeArchive();
   }
 
   function initializeGame() {
@@ -1654,6 +1975,18 @@ TERMINAL
     elements.historyModal.addEventListener("click", (event) => {
       if (event.target === elements.historyModal) closeHistory();
     });
+    elements.archiveOpenBtn.addEventListener("click", openArchive);
+    elements.archiveCloseBtn.addEventListener("click", closeArchive);
+    elements.archiveClearBtn.addEventListener("click", () => openArchiveConfirmation("clear"));
+    elements.archiveDifficultyFilters.addEventListener("click", handleArchiveFilter);
+    elements.archiveGradeFilters.addEventListener("click", handleArchiveFilter);
+    elements.archiveList.addEventListener("click", handleArchiveSelection);
+    elements.archiveDetail.addEventListener("click", handleArchiveSelection);
+    elements.archiveModal.addEventListener("click", (event) => {
+      if (event.target === elements.archiveModal) closeArchive();
+    });
+    elements.archiveConfirmCancelBtn.addEventListener("click", closeArchiveConfirmation);
+    elements.archiveConfirmActionBtn.addEventListener("click", confirmArchiveAction);
     document.addEventListener("keydown", handleModalKeydown);
     elements.newShiftBtn.addEventListener("click", startNewShift);
     elements.terminalForm.addEventListener("submit", handleTerminalSubmit);

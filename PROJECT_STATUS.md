@@ -1,233 +1,288 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
 최종 업데이트: 2026-08-08  
-현재 버전: **v0.8 — Incident History & RCA Analytics System**
+현재 버전: **v0.9 — Persistent Shift Archive & Operations Records**
 
 외부 라이브러리나 설치 과정 없이 `index.html`을 열어 실행하는 데이터센터 야간 운영 시뮬레이션 웹게임이다.
 
 ## 1. 현재 버전
 
-**v0.8 — Incident History & RCA Analytics System**
+**v0.9 — Persistent Shift Archive & Operations Records**
 
-v0.7의 EASY/NORMAL/HARD, Night Shift, 15종 Incident와 5개 Category, Queue, SLA, Diagnosis/Action, Linux Terminal, Investigation Evidence, Hard Gate, Shift Report를 유지하면서 해결된 Incident를 조회하는 History와 규칙 기반 RCA, Category/Operator Analytics를 추가했다.
+v0.8의 15종 Incident, EASY/NORMAL/HARD, Queue, SLA, Diagnosis/Action, Linux Terminal, Hard Investigation Gate, Current Shift Incident History, Timeline, RCA, Category Analytics와 Operator Summary를 유지한다.
 
-History는 **CURRENT SHIFT HISTORY** 범위다. NEW SHIFT 또는 새로고침 후 초기화되며 LocalStorage 영구 저장은 아직 사용하지 않는다.
-
-## 2. Incident Catalog와 Difficulty Pool
-
-Incident는 총 **15종**, Category는 **SERVER / STORAGE / NETWORK / POWER / COOLING**이며 각 Category에 3종씩 있다.
-
-- EASY: 7종
-- NORMAL: 12종
-- HARD: 15종
-- Severity: P1 2종 / P2 12종 / P3 1종
-- Category-aware Diagnosis/Action distractor 유지
-- 직전 Incident 즉시 반복 방지 유지
-
-`incidents.js`의 Catalog validation이 필수 필드, 중복 ID, Category, minDifficulty, usefulCommands와 diagnosticCommands를 검사한다.
-
-## 3. Incident History
-
-기존 `game.incidentHistory`를 현재 Shift에서 해결된 Ticket 전용 목록으로 사용한다.
-
-- Incident Queue: 현재 처리 중인 **OPEN** Ticket
-- Incident History: 해결 완료된 **RESOLVED** Ticket
-- 기본 정렬: `resolvedAt` 내림차순, 최근 해결 건 우선
-- Category Filter: ALL / SERVER / STORAGE / NETWORK / POWER / COOLING
-- SLA Filter: ALL / SLA MET / SLA BREACHED
-- Empty State: `NO RESOLVED INCIDENTS`
-- Modal UX: Open, Close, backdrop click, Escape
-- Desktop 2열 목록/상세 구조와 모바일 1열 반응형 구조
-
-History 목록에는 Ticket ID, Incident Title, Category, Severity, Rack, Difficulty, MTTR, SLA 결과와 해결 시각을 표시한다.
-
-## 4. Resolved Ticket Snapshot
-
-`resolveIncident()`는 Rack의 원본 Ticket을 History에 그대로 보관하지 않고 `createResolvedRecord()`로 독립 snapshot을 만든다.
-
-복사 대상:
-
-- 기본 Incident/Ticket 필드와 Original/Applied SLA
-- `terminalHistory`
-- `investigationEvidence`
-- `countedUsefulCommands`
-- `eventHistory`
-- `diagnosisOptions` / `actionOptions`
-- Wrong Diagnosis / Wrong Action 기록
-- `diagnosticCommands`와 이전 Rack metrics
-- `awardedScore`, `mttrSeconds`, SLA state
-
-Rack의 `ticket`이 `null`이 된 뒤에도 History Detail과 RCA가 원래 대응 기록을 조회할 수 있다.
-
-## 5. Ticket eventHistory와 Timeline
-
-각 Ticket은 전역 Event Log와 별도로 대응 흐름 재구성에 필요한 최소 이벤트만 가진다.
-
-- `INCIDENT_CREATED`
-- `COMMAND_EXECUTED`
-- `EVIDENCE_CAPTURED`
-- `DIAGNOSIS_STARTED`
-- `WRONG_DIAGNOSIS`
-- `DIAGNOSIS_CONFIRMED`
-- `WRONG_ACTION`
-- `RECOVERY_COMPLETED`
-- `SLA_BREACHED`
-
-모든 event timestamp는 실제 동작 시점의 `Date.now()`를 사용한다. Timeline은 저장된 이벤트만 시간순으로 보여주며 존재하지 않는 시각을 추측하지 않는다.
-
-## 6. Incident Detail과 RCA
-
-History 항목을 선택하면 다음을 보여준다.
-
-- Incident Summary: Ticket/Incident ID, Title, Category, Severity, Difficulty, Rack, Symptom, 생성/해결 시각, MTTR, Original/Applied SLA, SLA 결과
-- Root Cause: correctDiagnosis와 rootCause
-- Recovery: correctAction과 awardedScore
-- Investigation: 실행 명령 요약, useful evidence, invalid command 수, Evidence 충족 상태
-- Terminal Evidence Detail: `details/summary`로 simulated output을 필요할 때만 펼침
-- Incident Timeline
-- Root Cause Analysis
-
-`analytics.js`의 `buildIncidentReport(ticket)`와 `buildLessonsLearned(ticket)`가 화면 렌더링과 분리된 Report 데이터를 만든다.
-
-RCA 구성:
-
-1. What Happened
-2. Symptoms
-3. Investigation
-4. Root Cause
-5. Recovery Action
-6. SLA / MTTR Result
-7. Lessons Learned
-
-Lessons Learned는 외부 AI/API를 호출하지 않는다. Category, useful command 조합, Evidence 충족 여부와 Terminal 기록을 규칙으로 평가해 문장을 선택한다.
-
-## 7. Time Format
-
-`analytics.js`의 공통 formatter를 History, RCA와 Analytics에서 재사용한다.
-
-- 60초 미만: `37.2s`
-- 60초 이상: `1m 14.6s`
-- Timestamp: `22:14:08`
-
-## 8. Category Analytics
-
-Shift Report의 **CATEGORY PERFORMANCE**가 현재 Shift 데이터를 Category별로 계산한다.
-
-- Generated: 해결 History + 종료 시점 Open Ticket
-- Resolved: 해결 History
-- SLA Breached: 해결 및 Open Ticket 중 breach된 수
-- Average MTTR: 해당 Category의 해결 Record 평균
-- SLA Compliance: 해당 Category에서 해결된 Record 기준
-
-통계는 외부 서버 없이 현재 메모리 데이터만 사용한다.
-
-## 9. Operator Summary
-
-Shift Report의 **OPERATOR SUMMARY**는 현재 게임 Shift의 지표만 규칙 기반으로 요약한다.
-
-- SLA Compliance
-- Diagnosis Accuracy
-- Action Accuracy
-- Average MTTR와 Average Applied SLA 비교
-
-각 지표를 `STRONG` 또는 `NEEDS IMPROVEMENT`로 분류한다. 실제 사람의 능력이나 고용 평가를 의미하지 않는다는 안내 문구를 함께 표시한다.
-
-## 10. Investigation Coverage 변경
-
-v0.7은 해결된 Hard Ticket만 계산해 대부분 100%가 되는 한계가 있었다.
-
-v0.8은 Shift 종료 시 다음 전체를 계산한다.
+v0.9는 완료된 Shift를 독립 Snapshot으로 만들어 브라우저 LocalStorage에 저장하고 과거 교대 기록을 조회하는 Shift Archive를 추가했다.
 
 ```text
-현재 Shift의 모든 Hard Incident
-= 해결된 Hard History + 해결되지 않은 Open Hard Ticket
+CURRENT SHIFT
+현재 실행 중인 Rack, Queue, Timer, Terminal, Incident History
+
+SHIFT ARCHIVE
+종료가 확정된 과거 Shift Snapshot의 영구 기록
 ```
 
-- required Evidence 충족: completed
-- required Evidence 미충족: incomplete
-- Coverage: completed / 전체 Hard Incident × 100
+NEW SHIFT는 Current Shift만 초기화하며 Archive는 삭제하지 않는다.
 
-기존 Hard Diagnosis Gate의 진행 로직은 그대로 유지한다.
+## 2. LocalStorage Schema
 
-## 11. 테스트 구조
+저장 key:
 
-외부 프레임워크나 설치 과정 없이 실행 가능한 `tests/run-tests.js`를 추가했다. 브라우저에서 사용하는 `analytics.js`를 Node에서도 그대로 불러 순수 로직을 검사한다.
-
-자동 테스트 대상:
-
-- Incident Catalog validation
-- 15개 고유 ID와 Category별 3개 구성
-- Difficulty Pool 7 / 12 / 15
-- MTTR seconds/minutes formatting
-- History 최신순 정렬
-- Category + SLA Filter
-- Category statistics
-- 미해결 Ticket을 포함한 Investigation Coverage
-- RCA report와 Lessons Learned
-- Operator Summary 규칙
-
-실행 예:
-
-```powershell
-node tests\run-tests.js
+```text
+dcOpsShiftArchive
 ```
 
-## 12. 프로젝트 파일 구조
+현재 저장 구조:
+
+```js
+{
+  schemaVersion: 1,
+  nextShiftSequence: 4,
+  shifts: [/* latest Shift first */]
+}
+```
+
+- `CURRENT_SCHEMA_VERSION`: 1
+- `MAX_ARCHIVED_SHIFTS`: 50
+- 50개를 초과하면 가장 오래된 Shift부터 제외
+- `nextShiftSequence`로 `SHIFT-0001`, `SHIFT-0002` 형식의 ID 생성
+- 미래의 지원하지 않는 schema를 발견하면 읽거나 덮어쓰지 않고 안전하게 보존
+
+## 3. storage.js 역할
+
+LocalStorage 직접 접근은 `storage.js`에 격리했다.
+
+- `loadArchive()`
+- `saveArchive()`
+- `addShiftRecord()`
+- `deleteShiftRecord()`
+- `clearArchive()`
+- `validateArchive()`
+- `isValidShiftRecord()`
+
+처리 원칙:
+
+- JSON parse 실패: 빈 Archive fallback과 console warning
+- 잘못된 root/schema: 게임 실행을 막지 않고 안전하게 무시
+- 손상된 개별 Shift: 전체 Archive 대신 해당 Record만 제외
+- 중복 Shift ID: 최신 Record 하나만 유지
+- LocalStorage 접근/용량 오류: Shift Report는 유지하고 작은 안내와 warning 표시
+- 지원하지 않는 미래 schema: v1 데이터로 자동 덮어쓰지 않음
+
+## 4. Shift Snapshot
+
+`endShift()`가 통계를 확정한 뒤 `Analytics.createShiftSnapshot()`으로 저장에 필요한 값만 복사한다. `game` 전체, Timer ID, DOM 상태는 저장하지 않는다.
+
+저장 항목:
+
+- Shift ID, schemaVersion, 시작/종료/지속 시간, 난이도, 종료 이유
+- Grade, Final Score, Availability
+- Generated, Resolved, Unresolved
+- SLA Breach/Compliance, Average MTTR
+- Diagnosis/Action Accuracy
+- Investigation Coverage, Commands/Useful/Invalid
+- Category Analytics Snapshot
+- Operator Summary Snapshot
+- Resolved Incident History
+- Unresolved Ticket Summary
+
+Manual END SHIFT와 Timer 종료 모두 `archiveCompletedShift()` 한 경로를 사용한다. `shift.archived` guard로 한 Shift가 중복 저장되지 않게 한다.
+
+## 5. Archive Incident Data Size
+
+Resolved Ticket의 v0.8 Snapshot에서 과거 RCA 복원에 필요한 필드만 다시 압축한다.
+
+보존:
+
+- Ticket/Incident ID, Title, Category, Severity, Rack, Difficulty
+- Symptom, Root Cause, Recovery Action
+- 생성/해결 시각, MTTR, SLA 상태와 Awarded Score
+- Terminal command, valid/useful, timestamp, simulated output
+- Evidence와 Ticket eventHistory
+
+제외:
+
+- diagnosis/action option 배열
+- 이전 Rack metrics
+- Incident 전체 `diagnosticCommands` 사전
+
+개별 Terminal output은 최대 4,000자로 제한한다. 저장 실패가 발생해도 현재 게임과 Shift Report는 계속 동작한다.
+
+## 6. Shift Archive UI
+
+`SHIFT ARCHIVE` 버튼은 Current Shift의 `INCIDENT HISTORY`와 별도다.
+
+- Archive 목록은 `endedAt` 기준 최신순
+- 표시: Shift ID, 날짜, Difficulty, Grade, Score, Resolved/Generated, SLA Compliance, Average MTTR
+- Difficulty Filter: ALL / EASY / NORMAL / HARD
+- Grade Filter: ALL / S / A / B / C / D / F
+- Empty State: `NO ARCHIVED SHIFTS`
+- Close, Escape, backdrop click 지원
+- Desktop 2열 목록/상세와 모바일 1열 구조
+
+## 7. Shift Detail
+
+선택한 Snapshot 자체의 저장 데이터를 사용하며 현재 게임 값으로 재계산하지 않는다.
+
+- SHIFT SUMMARY: Started, Ended, Duration, Difficulty, End Reason, Grade, Score, Availability
+- OPERATIONS: Generated, Resolved, Unresolved, SLA Breached/Compliance, MTTR
+- ACCURACY: Diagnosis, Action
+- INVESTIGATION: Commands, Useful, Invalid, Coverage
+- CATEGORY PERFORMANCE
+- OPERATOR SUMMARY
+- PREVIOUS SHIFT COMPARISON
+- RESOLVED INCIDENT RECORDS
+- UNRESOLVED AT SHIFT END
+
+## 8. Archive Incident History
+
+과거 Shift의 Resolved Incident를 선택하면 v0.8의 `buildIncidentDetailMarkup()`을 재사용한다.
+
+- Ticket, Category, Severity, Rack
+- MTTR와 SLA result
+- Command/Evidence Summary
+- Terminal Evidence Detail
+- Root Cause와 Recovery
+- 실제 timestamp 기반 Timeline
+- 규칙 기반 RCA와 Lessons Learned
+
+Archive 목록 → Shift Detail → Incident Detail 순서로 단계적으로 이동하며 별도의 중첩 Modal을 만들지 않는다.
+
+## 9. Unresolved Incident Snapshot
+
+Shift 종료 시 Open Ticket은 간단한 Summary로 저장한다.
+
+- Ticket/Incident ID와 Title
+- Category, Severity, Difficulty, Rack
+- 생성 시각과 종료 당시 stage
+- SLA Breached 여부
+- Evidence 수와 required Evidence
+
+과거 Shift에서 해결되지 않은 상태로 교대가 끝났다는 사실을 확인할 수 있다.
+
+## 10. Category와 Operator Snapshot
+
+Category별로 다음 결과를 저장 시점 그대로 보존한다.
+
+- Generated
+- Resolved
+- SLA Breached
+- SLA Compliance
+- Average MTTR
+
+Operator Summary의 `STRONG`, `NEEDS IMPROVEMENT`, 현재 게임 Shift만 평가한다는 안내 문구도 Snapshot에 저장한다.
+
+## 11. Previous Shift Comparison
+
+선택 Shift와 바로 이전의 더 오래된 Shift를 비교한다.
+
+- Score: 높을수록 개선
+- SLA Compliance: 높을수록 개선
+- Average MTTR: 낮을수록 개선
+- Diagnosis Accuracy: 높을수록 개선
+
+숫자 delta와 함께 `IMPROVED`, `DECLINED`, `UNCHANGED` 텍스트를 표시한다. MTTR에는 `lower is better`, 나머지에는 `higher is better` 안내를 함께 표시해 부호만으로 오해하지 않게 한다.
+
+## 12. Personal Best
+
+현재 브라우저 LocalStorage의 시뮬레이션 Archive에서 계산한다.
+
+- Highest Score
+- Best SLA Compliance
+- Fastest Average MTTR
+
+해결 Incident가 없는 Shift는 Fastest Average MTTR 후보에서 제외한다. 실제 고용이나 직무 능력 평가가 아니라 이 브라우저의 게임 기록임을 UI에 명시한다.
+
+## 13. Archive Delete와 Clear
+
+- `DELETE SHIFT`: 선택한 Shift 한 건만 confirmation 후 삭제
+- `CLEAR ALL RECORDS`: Archive 전체를 confirmation 후 삭제
+- Cancel 시 데이터 유지
+- 삭제 후 목록, Detail, Filter와 Personal Best를 즉시 다시 렌더링
+- NEW SHIFT와 Archive Clear는 완전히 다른 동작
+
+## 14. 자동 테스트
+
+외부 테스트 프레임워크 없이 `tests/run-tests.js`를 실행한다. MemoryStorage adapter로 Node에서도 LocalStorage 흐름을 검사한다.
+
+검사 대상:
+
+- v0.8 Catalog/Pool/History/RCA/Analytics 회귀
+- Archive empty load와 Save/Load
+- root/schema/개별 Shift validation
+- corrupted JSON과 unsupported schema
+- 미래 schema 비덮어쓰기
+- Shift Snapshot과 저장 데이터 압축
+- Terminal output 크기 제한
+- 고유 Shift ID와 중복 ID 제외
+- 최대 50개 제한
+- Delete/Clear
+- 최신순, Difficulty/Grade Filter 기반 순수 로직
+- Previous Shift Comparison과 MTTR 방향
+- Personal Best
+- Current Shift reset이 Archive adapter를 지우지 않는 구조
+
+## 15. 프로젝트 파일 구조
 
 ```text
 dc-ops-simulator/
-├── index.html          # Shift, Queue, Terminal, History/Report Modal UI
-├── styles.css          # NOC 디자인, History/RCA/Analytics와 반응형 레이아웃
-├── incidents.js        # 15종 Incident 데이터와 Catalog validation
-├── analytics.js        # History Filter, MTTR, RCA, Category/Operator 순수 로직
-├── app.js              # 게임 엔진, Ticket eventHistory, Snapshot과 UI 연결
+├── index.html          # Current Shift, History, Archive/Report Modal UI
+├── styles.css          # NOC 디자인과 History/Archive 반응형 레이아웃
+├── incidents.js        # 15종 Incident Catalog와 validation
+├── storage.js          # LocalStorage schema, validation, CRUD와 50개 제한
+├── analytics.js        # RCA, Shift Snapshot, Comparison, Personal Best 순수 로직
+├── app.js              # 게임 엔진, 종료 저장 흐름과 Archive UI 연결
 ├── tests/
 │   └── run-tests.js    # 설치 없는 Node 자동 테스트
-└── PROJECT_STATUS.md   # 버전, 구조, Known Issues와 검증 결과
+└── PROJECT_STATUS.md
 ```
 
-## 13. Known Issues
+## 16. Known Issues
 
-History/RCA 핵심과 직접 관련 없는 기존 작은 문제는 유지했다.
+Persistence 핵심과 직접 관련 없는 기존 작은 문제는 유지했다.
 
+- 진행 중인 RUNNING Shift는 새로고침 후 복구되지 않는다. 새로고침 시 Current Shift는 초기화되지만 완료된 Shift Archive는 유지된다.
+- Archive는 브라우저 LocalStorage 범위다. 브라우저 데이터 삭제, private mode 종료, 다른 브라우저/기기에서는 공유되지 않는다.
+- 지원 schema는 현재 v1뿐이며 실제 migration 변환은 아직 없다.
+- Archive import/export와 cloud sync 기능은 없다.
 - Difficulty별 Score 배율과 Score 카드의 초기 `복구 시 +100 PTS` 문구가 일치하지 않는다.
 - Terminal의 `clear` 명령도 RUNNING 중 `commandsExecuted`에 포함된다.
 - ping/curl/nslookup은 target별 모든 세부 경우를 재현하지 않는 학습용 시뮬레이션이다.
-- 새로고침하거나 NEW SHIFT를 시작하면 History를 포함한 현재 교대 기록이 초기화되며 영구 저장 기능이 없다.
 - Incident/SLA/점수/자동 생성 간격은 추가 플레이 테스트 후 밸런스 조정이 필요하다.
 - 자동 Incident가 모든 Rack을 채운 뒤에도 예약 시점마다 가용 Rack을 확인해 경고 Log가 남을 수 있다.
 - 점수의 최솟값 제한이 없어 음수가 될 수 있다.
 - 백그라운드 탭에서는 화면 갱신이 늦어질 수 있지만 시간 계산은 `Date.now()` 기준이다.
 - Terminal은 실제 Linux shell의 권한, pipe, redirect, option 전체를 구현하지 않는다.
-- History는 현재 Shift 메모리 범위이며 검색, pagination, export 기능은 없다.
+- Archive 검색, pagination과 다중 Shift trend chart는 없다.
 
-## 14. 검증 결과
+## 17. 검증 결과
 
-- JavaScript 문법 검사 통과: `incidents.js`, `analytics.js`, `app.js`, `tests/run-tests.js`
+- JavaScript 문법 검사 통과: `incidents.js`, `storage.js`, `analytics.js`, `app.js`, `tests/run-tests.js`
 - HTML ID 중복 0, `app.js` DOM selector 누락 0
 - `git diff --check` 오류 0
-- 자동 테스트 **13개 통과, 실패 0개**
+- 자동 테스트 **32개 통과, 실패 0개**
 - Incident Catalog 15종, Category 각 3종, Pool EASY 7 / NORMAL 12 / HARD 15 확인
-- EASY에서 Terminal Evidence → Wrong Diagnosis → Diagnosis Confirmed → Wrong Action → Recovery 흐름 확인
-- 해결된 Incident가 History에 정확히 1건씩 추가되고 다중 History가 독립적으로 유지되는 것 확인
-- History 최근 해결 순 정렬, Category/SLA Filter와 Empty State 확인
-- Detail의 Summary, Root Cause, Recovery, Command/Evidence, MTTR, Applied SLA와 SLA 결과 확인
-- Ticket Timeline의 Command, Evidence, Wrong Diagnosis/Action, SLA Breach, Recovery event 확인
-- 규칙 기반 RCA와 Lessons Learned 확인
-- History Modal Close, Escape, backdrop click 확인
-- Shift Report의 Category Performance와 Operator Summary 확인
-- 해결되지 않은 Hard Ticket을 포함한 Investigation Coverage `0.0%` 사례 확인
-- NEW SHIFT History 초기화 확인
-- 자동 Incident 생성과 Shift 종료 후 Timer cleanup 확인
-- 375px 모바일 viewport에서 History Modal 수평 overflow 없음
+- Manual/Automatic END SHIFT가 동일 Archive 경로에서 Shift를 1회만 저장하는 것 확인
+- SHIFT-0001 → SHIFT-0002 고유 ID 증가와 최신순 정렬 확인
+- 새로고침과 NEW SHIFT 후 Archive 유지 확인
+- Archive Difficulty/Grade Filter 확인
+- Shift Summary, Operations, Accuracy, Investigation과 Category/Operator Snapshot 확인
+- Unresolved Ticket 6건의 종료 Snapshot 확인
+- Previous Shift Comparison과 Personal Best 확인
+- Archive Incident의 RCA, Timeline, Terminal Evidence 재사용 확인
+- 단일 Delete Cancel/Confirm과 Clear All confirmation 확인
+- Current Incident History, RCA, Timeline 회귀 확인
+- Hard Investigation Gate 유지 확인
+- Timer cleanup과 중복 Archive 방지 확인
+- 375px 모바일 viewport에서 Archive 수평 overflow 없음
+- Archive Modal Escape/backdrop 닫기 확인
 - 브라우저 콘솔 JavaScript error 0개
 
-## 15. 다음 추천 버전
+## 18. 다음 추천 버전
 
-### v0.9 — Persistent Operations Archive & RCA Export
+### v1.0 — Portable Archive & Storage Migration
 
-1. LocalStorage schema version을 두고 Shift History를 영구 보존한다.
-2. CURRENT SHIFT와 ARCHIVED SHIFT를 분리해 날짜/Category/SLA 검색을 추가한다.
-3. `buildIncidentReport()` 결과를 JSON 또는 Markdown RCA로 export한다.
-4. History pagination과 Shift 간 Category trend를 추가한다.
-5. 저장 데이터 migration과 corrupt data 복구 테스트를 추가한다.
+1. Archive JSON/Markdown export와 검증된 JSON import를 추가한다.
+2. schema v1 → v2 migration runner와 rollback-safe 테스트를 추가한다.
+3. Shift pagination, 날짜 검색과 Category trend chart를 추가한다.
+4. 선택적인 RUNNING Shift recovery를 별도 key와 짧은 checkpoint로 구현한다.
+5. LocalStorage adapter 경계를 재사용해 DynamoDB/API adapter로 교체 가능한 비동기 repository interface를 설계한다.

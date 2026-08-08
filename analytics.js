@@ -184,6 +184,147 @@
     };
   }
 
+  function createArchiveIncidentRecord(ticket) {
+    return {
+      ticketId: ticket.ticketId,
+      incidentId: ticket.incidentId,
+      title: ticket.title,
+      category: ticket.category,
+      severity: ticket.severity,
+      difficulty: ticket.difficulty,
+      affectedRack: ticket.affectedRack,
+      symptom: ticket.symptom,
+      createdAt: ticket.createdAt,
+      resolvedAt: ticket.resolvedAt,
+      mttrSeconds: getMttrSeconds(ticket),
+      slaSeconds: ticket.slaSeconds,
+      appliedSlaSeconds: ticket.appliedSlaSeconds,
+      slaBreached: Boolean(ticket.slaBreached),
+      correctDiagnosis: ticket.correctDiagnosis,
+      rootCause: ticket.rootCause,
+      correctAction: ticket.correctAction,
+      awardedScore: ticket.awardedScore ?? ticket.rewardScore ?? ticket.score ?? 0,
+      terminalHistory: safeArray(ticket.terminalHistory).map((record) => ({
+        command: record.command,
+        valid: Boolean(record.valid),
+        useful: Boolean(record.useful),
+        executedAt: record.executedAt,
+        output: String(record.output ?? "").slice(0, 4000)
+      })),
+      investigationEvidence: [...safeArray(ticket.investigationEvidence)],
+      countedUsefulCommands: [...safeArray(ticket.countedUsefulCommands)],
+      requiredEvidenceCount: Number(ticket.requiredEvidenceCount ?? 0),
+      investigationRequired: Boolean(ticket.investigationRequired),
+      eventHistory: safeArray(ticket.eventHistory).map((event) => ({
+        type: event.type,
+        detail: event.detail,
+        timestamp: event.timestamp
+      }))
+    };
+  }
+
+  function createUnresolvedTicketSummary(ticket) {
+    return {
+      ticketId: ticket.ticketId,
+      incidentId: ticket.incidentId,
+      title: ticket.title,
+      category: ticket.category,
+      severity: ticket.severity,
+      difficulty: ticket.difficulty,
+      affectedRack: ticket.affectedRack,
+      createdAt: ticket.createdAt,
+      stage: ticket.stage,
+      slaBreached: Boolean(ticket.slaBreached),
+      appliedSlaSeconds: ticket.appliedSlaSeconds,
+      evidenceCount: new Set(safeArray(ticket.countedUsefulCommands)).size,
+      requiredEvidenceCount: Number(ticket.requiredEvidenceCount ?? 0)
+    };
+  }
+
+  function createShiftSnapshot(options) {
+    const { shift, report, grade, availability, incidentHistory, unresolvedTickets, endReason, operatorSummary } = options;
+    const endedAt = Number(shift.endedAt) || Date.now();
+    return {
+      schemaVersion: 1,
+      startedAt: shift.startedAt,
+      endedAt,
+      durationSeconds: Math.max(0, (endedAt - shift.startedAt) / 1000),
+      difficulty: report.difficulty,
+      endReason,
+      finalScore: report.score,
+      grade,
+      availability,
+      incidentsGenerated: report.generated,
+      incidentsResolved: report.resolved,
+      unresolvedCount: report.unresolved,
+      slaBreaches: report.breaches,
+      slaCompliance: report.slaCompliance,
+      averageMttr: report.averageMttr,
+      diagnosisAccuracy: report.diagnosisAccuracy,
+      actionAccuracy: report.actionAccuracy,
+      investigationCoverage: report.investigationCoverage,
+      commandsExecuted: report.commandsExecuted,
+      usefulCommands: report.usefulCommands,
+      invalidCommands: report.invalidCommands,
+      categoryAnalytics: safeArray(report.categoryAnalytics).map((category) => ({ ...category })),
+      operatorSummary: {
+        strong: [...safeArray(operatorSummary?.strong)],
+        needsImprovement: [...safeArray(operatorSummary?.needsImprovement)],
+        note: operatorSummary?.note ?? "현재 게임 Shift의 대응 기록만 요약한 결과입니다."
+      },
+      incidentHistory: safeArray(incidentHistory).map(createArchiveIncidentRecord),
+      unresolvedTickets: safeArray(unresolvedTickets).map(createUnresolvedTicketSummary)
+    };
+  }
+
+  function sortArchivedShifts(shifts) {
+    return [...safeArray(shifts)].sort((left, right) => (right.endedAt ?? 0) - (left.endedAt ?? 0));
+  }
+
+  function filterArchivedShifts(shifts, difficulty = "ALL", grade = "ALL") {
+    return sortArchivedShifts(shifts).filter((shift) =>
+      (difficulty === "ALL" || shift.difficulty === difficulty) &&
+      (grade === "ALL" || shift.grade === grade)
+    );
+  }
+
+  function comparisonMetric(label, current, previous, lowerIsBetter = false, suffix = "") {
+    const delta = Number(current) - Number(previous);
+    const unchanged = Math.abs(delta) < 0.05;
+    const improved = !unchanged && (lowerIsBetter ? delta < 0 : delta > 0);
+    return {
+      label,
+      current: Number(current),
+      previous: Number(previous),
+      delta,
+      suffix,
+      lowerIsBetter,
+      status: unchanged ? "UNCHANGED" : improved ? "IMPROVED" : "DECLINED"
+    };
+  }
+
+  function compareShifts(current, previous) {
+    if (!current || !previous) return null;
+    return [
+      comparisonMetric("Score", current.finalScore, previous.finalScore),
+      comparisonMetric("SLA Compliance", current.slaCompliance, previous.slaCompliance, false, "%"),
+      comparisonMetric("Average MTTR", current.averageMttr, previous.averageMttr, true, "s"),
+      comparisonMetric("Diagnosis Accuracy", current.diagnosisAccuracy, previous.diagnosisAccuracy, false, "%")
+    ];
+  }
+
+  function calculatePersonalBest(shifts) {
+    const records = safeArray(shifts);
+    if (!records.length) return null;
+    const highestScore = records.reduce((best, shift) => shift.finalScore > best.finalScore ? shift : best);
+    const bestSla = records.reduce((best, shift) => shift.slaCompliance > best.slaCompliance ? shift : best);
+    const mttrCandidates = records.filter((shift) => shift.incidentsResolved > 0);
+    const fastestMttr = mttrCandidates.length
+      ? mttrCandidates.reduce((best, shift) => shift.averageMttr < best.averageMttr ? shift : best)
+      : null;
+    return { highestScore, bestSla, fastestMttr };
+  }
+
   const api = Object.freeze({
     CATEGORIES,
     formatDuration,
@@ -196,7 +337,14 @@
     calculateInvestigationCoverage,
     buildLessonsLearned,
     buildIncidentReport,
-    buildOperatorSummary
+    buildOperatorSummary,
+    createArchiveIncidentRecord,
+    createUnresolvedTicketSummary,
+    createShiftSnapshot,
+    sortArchivedShifts,
+    filterArchivedShifts,
+    compareShifts,
+    calculatePersonalBest
   });
 
   global.DCOpsAnalytics = api;

@@ -42,6 +42,7 @@
         </div>
         <small class="difficulty-summary" id="difficultySummary">SLA ×1.00 · SCORE ×1.00 · INVESTIGATION OPTIONAL</small>
         <button class="history-open-btn" id="historyOpenBtn" type="button">해결 기록 · INCIDENT HISTORY <span id="historyButtonCount">0</span></button>
+        <button class="archive-open-btn" id="archiveOpenBtn" type="button">과거 교대 · SHIFT ARCHIVE <span id="archiveButtonCount">0</span></button>
         <button class="shift-start-btn" id="startShiftBtn" type="button">교대 시작 · START SHIFT</button>
         <button class="shift-end-btn" id="endShiftBtn" type="button" disabled hidden>교대 종료 · END SHIFT</button>
       </div>
@@ -252,6 +253,69 @@
     </div>
   </section>
 
+  <section class="archive-modal" id="archiveModal" role="dialog" aria-modal="true" aria-labelledby="archiveTitle" hidden>
+    <div class="archive-card">
+      <header class="archive-heading">
+        <div>
+          <p class="eyebrow">LOCAL BROWSER RECORDS · COMPLETED SHIFTS</p>
+          <h2 id="archiveTitle">SHIFT ARCHIVE</h2>
+          <p>종료된 과거 Shift Snapshot입니다. 현재 진행 데이터와 분리되어 있습니다.</p>
+        </div>
+        <div class="archive-heading-actions">
+          <button class="archive-clear-btn" id="archiveClearBtn" type="button">CLEAR ALL RECORDS</button>
+          <button class="modal-close-btn" id="archiveCloseBtn" type="button" aria-label="Shift Archive 닫기">CLOSE ×</button>
+        </div>
+      </header>
+      <p class="archive-notice" id="archiveNotice" role="status" hidden></p>
+      <div class="archive-filters">
+        <div class="history-filter-group" id="archiveDifficultyFilters" role="group" aria-label="Archive Difficulty 필터">
+          <span>DIFFICULTY</span>
+          <button type="button" data-archive-difficulty="ALL" aria-pressed="true" class="selected">ALL</button>
+          <button type="button" data-archive-difficulty="EASY" aria-pressed="false">EASY</button>
+          <button type="button" data-archive-difficulty="NORMAL" aria-pressed="false">NORMAL</button>
+          <button type="button" data-archive-difficulty="HARD" aria-pressed="false">HARD</button>
+        </div>
+        <div class="history-filter-group" id="archiveGradeFilters" role="group" aria-label="Archive Grade 필터">
+          <span>GRADE</span>
+          <button type="button" data-archive-grade="ALL" aria-pressed="true" class="selected">ALL</button>
+          <button type="button" data-archive-grade="S" aria-pressed="false">S</button>
+          <button type="button" data-archive-grade="A" aria-pressed="false">A</button>
+          <button type="button" data-archive-grade="B" aria-pressed="false">B</button>
+          <button type="button" data-archive-grade="C" aria-pressed="false">C</button>
+          <button type="button" data-archive-grade="D" aria-pressed="false">D</button>
+          <button type="button" data-archive-grade="F" aria-pressed="false">F</button>
+        </div>
+      </div>
+      <section class="personal-best" id="archivePersonalBest" aria-labelledby="personalBestTitle"></section>
+      <div class="archive-layout">
+        <section class="archive-list-panel" aria-labelledby="archiveListTitle">
+          <div class="history-list-heading"><h3 id="archiveListTitle">COMPLETED SHIFTS</h3><span id="archiveResultCount">0 RECORDS</span></div>
+          <div class="archive-list" id="archiveList"></div>
+          <p class="history-empty" id="archiveEmpty">NO ARCHIVED SHIFTS</p>
+        </section>
+        <article class="archive-detail" id="archiveDetail" aria-live="polite">
+          <div class="history-detail-empty" id="archiveDetailEmpty">
+            <span>OPERATIONS RECORD</span>
+            <strong>SELECT AN ARCHIVED SHIFT</strong>
+          </div>
+          <div id="archiveDetailContent" hidden></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <section class="archive-confirm-modal" id="archiveConfirmModal" role="dialog" aria-modal="true" aria-labelledby="archiveConfirmTitle" aria-describedby="archiveConfirmDescription" hidden>
+    <div class="confirm-card archive-confirm-card">
+      <p class="eyebrow">DESTRUCTIVE ARCHIVE ACTION</p>
+      <h2 id="archiveConfirmTitle">DELETE ARCHIVE RECORD?</h2>
+      <p id="archiveConfirmDescription">이 작업은 현재 Shift에는 영향을 주지 않습니다.</p>
+      <div class="confirm-actions">
+        <button class="confirm-cancel-btn" id="archiveConfirmCancelBtn" type="button">취소 · CANCEL</button>
+        <button class="confirm-end-btn" id="archiveConfirmActionBtn" type="button">삭제 · DELETE</button>
+      </div>
+    </div>
+  </section>
+
   <section class="report-modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportTitle" hidden>
     <div class="report-card">
       <p class="eyebrow">SHIFT COMPLETE</p>
@@ -290,6 +354,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="incidents.js"></script>
+  <script src="storage.js"></script>
   <script src="analytics.js"></script>
   <script src="app.js"></script>
 </body>
