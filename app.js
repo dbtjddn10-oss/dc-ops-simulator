@@ -1,7 +1,7 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.7 설정 ----------------
+  // ---------------- v0.8 설정 ----------------
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -90,6 +90,7 @@
   const INCIDENTS = Array.isArray(window.DCOpsData?.incidents)
     ? window.DCOpsData.incidents
     : [];
+  const Analytics = window.DCOpsAnalytics;
 
   function randomBetween(min, max) {
     return Math.round(min + Math.random() * (max - min));
@@ -143,6 +144,8 @@
     ticketSequence: 0,
     lastIncidentId: null,
     incidentHistory: [],
+    historyFilters: { category: "ALL", sla: "ALL" },
+    selectedHistoryTicketId: null,
     selectedDifficulty: "NORMAL",
     stats: createEmptyStats(),
     shift: {
@@ -229,6 +232,20 @@
     reportInvalidCommands: document.querySelector("#reportInvalidCommands"),
     reportDifficulty: document.querySelector("#reportDifficulty"),
     reportInvestigationCoverage: document.querySelector("#reportInvestigationCoverage"),
+    reportCategoryPerformance: document.querySelector("#reportCategoryPerformance"),
+    reportOperatorSummary: document.querySelector("#reportOperatorSummary"),
+    historyOpenBtn: document.querySelector("#historyOpenBtn"),
+    historyButtonCount: document.querySelector("#historyButtonCount"),
+    historyModal: document.querySelector("#historyModal"),
+    historyCloseBtn: document.querySelector("#historyCloseBtn"),
+    historyCategoryFilters: document.querySelector("#historyCategoryFilters"),
+    historySlaFilters: document.querySelector("#historySlaFilters"),
+    historyList: document.querySelector("#historyList"),
+    historyEmpty: document.querySelector("#historyEmpty"),
+    historyResultCount: document.querySelector("#historyResultCount"),
+    historyDetail: document.querySelector("#historyDetail"),
+    historyDetailEmpty: document.querySelector("#historyDetailEmpty"),
+    historyDetailContent: document.querySelector("#historyDetailContent"),
     terminalRackLabel: document.querySelector("#terminalRackLabel"),
     terminalSensor: document.querySelector("#terminalSensor"),
     terminalOutput: document.querySelector("#terminalOutput"),
@@ -288,6 +305,36 @@
       .replaceAll(">", "&gt;")
       .replaceAll('"', "&quot;")
       .replaceAll("'", "&#039;");
+  }
+
+  function recordTicketEvent(ticket, type, detail = "", timestamp = Date.now()) {
+    if (!ticket) return;
+    if (!Array.isArray(ticket.eventHistory)) ticket.eventHistory = [];
+    ticket.eventHistory.push({ type, detail: String(detail || ""), timestamp });
+  }
+
+  function cloneOptions(options) {
+    return Array.isArray(options) ? options.map((option) => ({ ...option })) : null;
+  }
+
+  function createResolvedRecord(ticket, awardedScore) {
+    const resolvedAt = Number(ticket.resolvedAt) || Date.now();
+    return {
+      ...ticket,
+      resolvedAt,
+      mttrSeconds: Math.max(0, (resolvedAt - ticket.createdAt) / 1000),
+      awardedScore,
+      terminalHistory: ticket.terminalHistory.map((record) => ({ ...record })),
+      investigationEvidence: [...ticket.investigationEvidence],
+      countedUsefulCommands: [...ticket.countedUsefulCommands],
+      eventHistory: ticket.eventHistory.map((event) => ({ ...event })),
+      diagnosisOptions: cloneOptions(ticket.diagnosisOptions),
+      actionOptions: cloneOptions(ticket.actionOptions),
+      wrongDiagnoses: [...ticket.wrongDiagnoses],
+      wrongActions: [...ticket.wrongActions],
+      diagnosticCommands: { ...(ticket.diagnosticCommands ?? {}) },
+      previousMetrics: ticket.previousMetrics ? { ...ticket.previousMetrics } : null
+    };
   }
 
   function shuffle(items) {
@@ -607,14 +654,19 @@ TERMINAL
       }
     }
 
+    const executedAt = Date.now();
     getTerminalSession(rack).push({
       prompt: elements.terminalPrompt.textContent,
       command: parsed.normalized,
       output,
       valid,
       useful,
-      executedAt: Date.now()
+      executedAt
     });
+    if (ticket) {
+      recordTicketEvent(ticket, "COMMAND_EXECUTED", parsed.normalized, executedAt);
+      if (useful) recordTicketEvent(ticket, "EVIDENCE_CAPTURED", parsed.canonical, executedAt);
+    }
     updateTicketPanel();
     updateActionControls();
     renderTerminal();
@@ -802,6 +854,179 @@ TERMINAL
     }).join("");
   }
 
+  function getFilteredHistory() {
+    return Analytics.filterHistory(
+      game.incidentHistory,
+      game.historyFilters.category,
+      game.historyFilters.sla
+    );
+  }
+
+  function timelineLabel(event) {
+    const labels = {
+      INCIDENT_CREATED: "INCIDENT CREATED",
+      COMMAND_EXECUTED: "COMMAND",
+      EVIDENCE_CAPTURED: "EVIDENCE CAPTURED",
+      DIAGNOSIS_STARTED: "DIAGNOSIS STARTED",
+      WRONG_DIAGNOSIS: "WRONG DIAGNOSIS",
+      DIAGNOSIS_CONFIRMED: "DIAGNOSIS CONFIRMED",
+      WRONG_ACTION: "WRONG ACTION",
+      RECOVERY_COMPLETED: "RECOVERY COMPLETED",
+      SLA_BREACHED: "SLA BREACHED"
+    };
+    return labels[event.type] ?? event.type.replaceAll("_", " ");
+  }
+
+  function renderHistoryDetail(ticket) {
+    elements.historyDetailEmpty.hidden = Boolean(ticket);
+    elements.historyDetailContent.hidden = !ticket;
+    if (!ticket) {
+      elements.historyDetailContent.innerHTML = "";
+      return;
+    }
+
+    const report = Analytics.buildIncidentReport(ticket);
+    const summary = report.summary;
+    const investigation = report.investigation;
+    const evidenceCount = new Set(investigation.evidence).size;
+    const evidenceLabel = investigation.investigationRequired
+      ? `${Math.min(evidenceCount, investigation.requiredEvidenceCount)} / ${investigation.requiredEvidenceCount} REQUIRED`
+      : `OPTIONAL INVESTIGATION · ${evidenceCount} useful commands captured`;
+    const commandItems = investigation.commands.length
+      ? investigation.commands.map((command) => `<li><code>${escapeHtml(command)}</code></li>`).join("")
+      : "<li>NO COMMANDS RECORDED</li>";
+    const evidenceItems = investigation.evidence.length
+      ? investigation.evidence.map((command) => `<li>✓ <code>${escapeHtml(command)}</code></li>`).join("")
+      : "<li>NO USEFUL EVIDENCE CAPTURED</li>";
+    const evidenceDetails = ticket.terminalHistory.length
+      ? ticket.terminalHistory.map((record) => `<details class="evidence-output"><summary>${record.useful ? "EVIDENCE · " : "COMMAND · "}${escapeHtml(record.command)}</summary><pre>${escapeHtml(record.output)}</pre></details>`).join("")
+      : "";
+    const timeline = report.timeline.length
+      ? report.timeline.map((event) => {
+        const elapsed = Math.max(0, (event.timestamp - ticket.createdAt) / 1000);
+        return `<li><time>${escapeHtml(Analytics.formatDuration(elapsed))}</time><div><strong>${escapeHtml(timelineLabel(event))}</strong>${event.detail ? `<span>${escapeHtml(event.detail)}</span>` : ""}<small>${escapeHtml(Analytics.formatTimestamp(event.timestamp))}</small></div></li>`;
+      }).join("")
+      : '<li class="timeline-empty">NO TIMELINE EVENTS</li>';
+
+    elements.historyDetailContent.innerHTML = `
+      <header class="incident-report-heading">
+        <div><span>${escapeHtml(summary.ticketId)}</span><h3>${escapeHtml(summary.title)}</h3></div>
+        <span class="history-sla ${ticket.slaBreached ? "breached" : "met"}">${escapeHtml(summary.slaResult)}</span>
+      </header>
+      <section class="incident-report-section">
+        <h4>INCIDENT SUMMARY</h4>
+        <dl class="incident-summary-grid">
+          <div><dt>TICKET / INCIDENT</dt><dd>${escapeHtml(summary.ticketId)} · ${escapeHtml(summary.incidentId)}</dd></div>
+          <div><dt>CATEGORY / SEVERITY</dt><dd>${escapeHtml(summary.category)} · ${escapeHtml(summary.severity)}</dd></div>
+          <div><dt>DIFFICULTY / RACK</dt><dd>${escapeHtml(summary.difficulty)} · ${escapeHtml(summary.rack)}</dd></div>
+          <div><dt>CREATED</dt><dd>${escapeHtml(Analytics.formatTimestamp(summary.createdAt))}</dd></div>
+          <div><dt>RESOLVED</dt><dd>${escapeHtml(Analytics.formatTimestamp(summary.resolvedAt))}</dd></div>
+          <div><dt>MTTR</dt><dd>${escapeHtml(Analytics.formatDuration(summary.mttrSeconds))}</dd></div>
+          <div><dt>ORIGINAL / APPLIED SLA</dt><dd>${summary.originalSlaSeconds}s / ${summary.appliedSlaSeconds}s</dd></div>
+          <div><dt>SLA RESULT</dt><dd>${escapeHtml(summary.slaResult)}</dd></div>
+        </dl>
+        <p class="report-symptom"><strong>SYMPTOM</strong>${escapeHtml(summary.symptom)}</p>
+      </section>
+      <section class="incident-report-section split-report-section">
+        <div><h4>ROOT CAUSE</h4><strong>${escapeHtml(report.rootCause.diagnosis)}</strong><p>${escapeHtml(report.rootCause.detail)}</p></div>
+        <div><h4>RECOVERY</h4><strong>+${report.recovery.awardedScore} PTS</strong><p>${escapeHtml(report.recovery.action)}</p></div>
+      </section>
+      <section class="incident-report-section">
+        <h4>INVESTIGATION</h4>
+        <div class="evidence-status">${escapeHtml(evidenceLabel)}</div>
+        <div class="investigation-columns">
+          <div><h5>COMMANDS EXECUTED</h5><ul>${commandItems}</ul></div>
+          <div><h5>INVESTIGATION EVIDENCE</h5><ul>${evidenceItems}</ul></div>
+        </div>
+        <p class="invalid-command-count">INVALID COMMANDS · ${investigation.invalidCommandCount}</p>
+        ${evidenceDetails ? `<details class="terminal-evidence-details"><summary>TERMINAL EVIDENCE DETAIL</summary>${evidenceDetails}</details>` : ""}
+      </section>
+      <section class="incident-report-section">
+        <h4>INCIDENT TIMELINE</h4>
+        <ol class="incident-timeline">${timeline}</ol>
+      </section>
+      <section class="incident-report-section rca-section">
+        <h4>ROOT CAUSE ANALYSIS</h4>
+        <ol class="rca-list">
+          <li><strong>What Happened</strong><p>${escapeHtml(report.rca.whatHappened)}</p></li>
+          <li><strong>Symptoms</strong><p>${escapeHtml(report.rca.symptoms)}</p></li>
+          <li><strong>Investigation</strong><p>${escapeHtml(report.rca.investigation)}</p></li>
+          <li><strong>Root Cause</strong><p>${escapeHtml(report.rca.rootCause)}</p></li>
+          <li><strong>Recovery Action</strong><p>${escapeHtml(report.rca.recoveryAction)}</p></li>
+          <li><strong>SLA / MTTR Result</strong><p>${escapeHtml(report.rca.result)}</p></li>
+          <li><strong>Lessons Learned</strong><p>${escapeHtml(report.rca.lessonsLearned)}</p></li>
+        </ol>
+      </section>`;
+  }
+
+  function renderHistory() {
+    const records = getFilteredHistory();
+    elements.historyButtonCount.textContent = game.incidentHistory.length;
+    elements.historyResultCount.textContent = `${records.length} RECORD${records.length === 1 ? "" : "S"}`;
+    elements.historyEmpty.hidden = records.length > 0;
+
+    if (!records.some((ticket) => ticket.ticketId === game.selectedHistoryTicketId)) {
+      game.selectedHistoryTicketId = records[0]?.ticketId ?? null;
+    }
+    elements.historyList.innerHTML = records.map((ticket) => {
+      const mttr = Analytics.getMttrSeconds(ticket);
+      const selected = ticket.ticketId === game.selectedHistoryTicketId;
+      return `<button class="history-item${selected ? " selected" : ""}" type="button" data-history-ticket-id="${escapeHtml(ticket.ticketId)}" aria-pressed="${selected}">
+        <span class="history-item-top"><strong>${escapeHtml(ticket.ticketId)}</strong><span class="queue-category category-${ticket.category.toLowerCase()}">${escapeHtml(ticket.category)}</span><b>${escapeHtml(ticket.severity)}</b></span>
+        <span class="history-item-title">${escapeHtml(ticket.title)}</span>
+        <span class="history-item-meta">${escapeHtml(ticket.affectedRack)} · ${escapeHtml(ticket.difficulty)} · ${escapeHtml(Analytics.formatTimestamp(ticket.resolvedAt))}</span>
+        <span class="history-item-result ${ticket.slaBreached ? "breached" : "met"}">${Analytics.getSlaResult(ticket)} · MTTR ${escapeHtml(Analytics.formatDuration(mttr))}</span>
+      </button>`;
+    }).join("");
+
+    const selectedTicket = records.find((ticket) => ticket.ticketId === game.selectedHistoryTicketId) ?? null;
+    renderHistoryDetail(selectedTicket);
+  }
+
+  function updateHistoryFilters() {
+    elements.historyCategoryFilters.querySelectorAll("[data-history-category]").forEach((button) => {
+      const selected = button.dataset.historyCategory === game.historyFilters.category;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    elements.historySlaFilters.querySelectorAll("[data-history-sla]").forEach((button) => {
+      const selected = button.dataset.historySla === game.historyFilters.sla;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+  }
+
+  function openHistory() {
+    updateHistoryFilters();
+    renderHistory();
+    elements.historyModal.hidden = false;
+    elements.historyCloseBtn.focus();
+  }
+
+  function closeHistory() {
+    elements.historyModal.hidden = true;
+    elements.historyOpenBtn.focus();
+  }
+
+  function handleHistoryFilter(event) {
+    const categoryButton = event.target.closest("[data-history-category]");
+    const slaButton = event.target.closest("[data-history-sla]");
+    if (!categoryButton && !slaButton) return;
+    if (categoryButton) game.historyFilters.category = categoryButton.dataset.historyCategory;
+    if (slaButton) game.historyFilters.sla = slaButton.dataset.historySla;
+    game.selectedHistoryTicketId = null;
+    updateHistoryFilters();
+    renderHistory();
+  }
+
+  function handleHistorySelection(event) {
+    const button = event.target.closest("[data-history-ticket-id]");
+    if (!button) return;
+    game.selectedHistoryTicketId = button.dataset.historyTicketId;
+    renderHistory();
+    elements.historyDetail.scrollTop = 0;
+  }
+
   function updateShiftPanel() {
     const shift = game.shift;
     const statusClass = shift.status.toLowerCase();
@@ -856,6 +1081,8 @@ TERMINAL
     updateIncidentQueue();
     updateShiftPanel();
     renderTerminal();
+    elements.historyButtonCount.textContent = game.incidentHistory.length;
+    if (!elements.historyModal.hidden) renderHistory();
   }
 
   // ---------------- Incident, Diagnosis, Action ----------------
@@ -922,6 +1149,7 @@ TERMINAL
       terminalHistory: [],
       investigationEvidence: [],
       countedUsefulCommands: [],
+      eventHistory: [{ type: "INCIDENT_CREATED", detail: `${incident.title} · ${rackLabel(rack.id)}`, timestamp: createdAt }],
       investigationRequired: difficulty.investigationRequired,
       requiredEvidenceCount,
       prematureRecoveryPenalized: false,
@@ -976,6 +1204,7 @@ TERMINAL
 
     ticket.stage = "diagnosis";
     ticket.diagnosisOptions = createChoiceOptions(ticket, "correctDiagnosis");
+    recordTicketEvent(ticket, "DIAGNOSIS_STARTED", "Diagnosis options opened");
     addLog("DIAG", `${rackLabel(rack.id)} diagnosis started`);
     showToast("진단 후보가 준비되었습니다. 증상과 수치를 확인하세요.");
     refreshUI();
@@ -1014,16 +1243,12 @@ TERMINAL
     const ticket = rack.ticket;
     const awardedScore = ticket.rewardScore ?? ticket.score;
     ticket.resolvedAt = Date.now();
+    recordTicketEvent(ticket, "RECOVERY_COMPLETED", ticket.correctAction, ticket.resolvedAt);
     if (ticket.countedInShift) {
       game.stats.resolvedIncidents += 1;
       game.stats.totalResolutionTime += (ticket.resolvedAt - ticket.createdAt) / 1000;
     }
-    game.incidentHistory.push({
-      ...ticket,
-      terminalHistory: ticket.terminalHistory.map((record) => ({ ...record })),
-      investigationEvidence: [...ticket.investigationEvidence],
-      countedUsefulCommands: [...ticket.countedUsefulCommands]
-    });
+    game.incidentHistory.push(createResolvedRecord(ticket, awardedScore));
     rack.status = ticket.previousStatus ?? "healthy";
     rack.metrics = ticket.previousMetrics ? { ...ticket.previousMetrics } : createNormalMetrics();
     rack.ticket = null;
@@ -1052,6 +1277,7 @@ TERMINAL
 
     if (!option.isCorrect) {
       attempted.push(option.optionId);
+      recordTicketEvent(ticket, isDiagnosis ? "WRONG_DIAGNOSIS" : "WRONG_ACTION", option.label);
       const penalty = isDiagnosis ? 10 : 20;
       game.score -= penalty;
       if (ticket.countedInShift) {
@@ -1070,6 +1296,7 @@ TERMINAL
       if (ticket.countedInShift) game.stats.correctDiagnoses += 1;
       ticket.stage = "action";
       ticket.actionOptions = createChoiceOptions(ticket, "correctAction");
+      recordTicketEvent(ticket, "DIAGNOSIS_CONFIRMED", ticket.correctDiagnosis);
       addLog("DIAG OK", ticket.correctDiagnosis);
       showToast("정확한 진단입니다. Root Cause를 확인하고 Action을 선택하세요.", "success");
       refreshUI();
@@ -1086,6 +1313,7 @@ TERMINAL
     if (!ticket || ticket.slaPenaltyApplied) return;
     ticket.slaBreached = true;
     ticket.slaPenaltyApplied = true;
+    recordTicketEvent(ticket, "SLA_BREACHED", `${ticket.appliedSlaSeconds}s applied SLA`);
     game.score -= 50;
     game.availability = Math.max(0, game.availability - 0.5);
     if (ticket.countedInShift) game.stats.slaBreaches += 1;
@@ -1161,6 +1389,8 @@ TERMINAL
     game.ticketSequence = 0;
     game.lastIncidentId = null;
     game.incidentHistory = [];
+    game.historyFilters = { category: "ALL", sla: "ALL" };
+    game.selectedHistoryTicketId = null;
     game.stats = createEmptyStats();
     if (resetDifficulty) game.selectedDifficulty = "NORMAL";
     game.shift.status = "IDLE";
@@ -1171,6 +1401,7 @@ TERMINAL
     elements.eventLog.innerHTML = "";
     elements.scoreTrend.textContent = "복구 시 +100 PTS";
     elements.endShiftConfirmModal.hidden = true;
+    elements.historyModal.hidden = true;
     elements.reportModal.hidden = true;
     refreshUI();
   }
@@ -1209,13 +1440,13 @@ TERMINAL
     const slaCompliance = stats.generatedIncidents === 0
       ? 100
       : ((stats.generatedIncidents - stats.slaBreaches) / stats.generatedIncidents) * 100;
-    const requiredInvestigations = game.incidentHistory.filter((ticket) =>
-      ticket.countedInShift && ticket.difficulty === "HARD" && ticket.investigationRequired
-    );
-    const completedInvestigations = requiredInvestigations.filter(hasRequiredEvidence);
-    const investigationCoverage = requiredInvestigations.length
-      ? completedInvestigations.length / requiredInvestigations.length * 100
-      : null;
+    const openTickets = racks.map((rack) => rack.ticket).filter((ticket) => ticket?.countedInShift);
+    const resolvedTickets = game.incidentHistory.filter((ticket) => ticket.countedInShift);
+    const investigation = Analytics.calculateInvestigationCoverage([...resolvedTickets, ...openTickets]);
+    const categoryAnalytics = Analytics.calculateCategoryAnalytics(resolvedTickets, openTickets);
+    const averageAppliedSla = resolvedTickets.length
+      ? resolvedTickets.reduce((total, ticket) => total + ticket.appliedSlaSeconds, 0) / resolvedTickets.length
+      : 0;
     return {
       difficulty,
       score: game.score,
@@ -1227,12 +1458,15 @@ TERMINAL
       diagnosisAccuracy: percent(stats.correctDiagnoses, diagnosisAttempts),
       actionAccuracy: percent(stats.correctActions, actionAttempts),
       averageMttr: stats.resolvedIncidents === 0 ? 0 : stats.totalResolutionTime / stats.resolvedIncidents,
+      averageAppliedSla,
       commandsExecuted: stats.commandsExecuted,
       usefulCommands: stats.usefulCommands,
       invalidCommands: stats.invalidCommands,
-      investigationRequiredIncidents: requiredInvestigations.length,
-      investigationCompletedIncidents: completedInvestigations.length,
-      investigationCoverage
+      investigationRequiredIncidents: investigation.required,
+      investigationCompletedIncidents: investigation.completed,
+      investigationIncompleteIncidents: investigation.incomplete,
+      investigationCoverage: investigation.coverage,
+      categoryAnalytics
     };
   }
 
@@ -1274,6 +1508,22 @@ TERMINAL
         ? "N/A"
         : `${report.investigationCoverage.toFixed(1)}%`
       : "OPTIONAL";
+    elements.reportCategoryPerformance.innerHTML = report.categoryAnalytics.map((category) => `
+      <article class="category-performance-card category-${category.category.toLowerCase()}">
+        <h4>${category.category}</h4>
+        <strong>${category.resolved} Resolved</strong>
+        <span>${category.generated} Generated · ${category.slaBreached} Breached</span>
+        <span>Avg MTTR ${Analytics.formatDuration(category.averageMttr)}</span>
+        <span>SLA ${category.slaCompliance === null ? "N/A" : `${category.slaCompliance.toFixed(1)}%`}</span>
+      </article>`).join("");
+    const operator = Analytics.buildOperatorSummary(report);
+    const summaryList = (items, emptyText) => items.length
+      ? `<ul>${items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+      : `<p>${emptyText}</p>`;
+    elements.reportOperatorSummary.innerHTML = `
+      <div><strong>STRONG</strong>${summaryList(operator.strong, "No standout metric yet")}</div>
+      <div><strong>NEEDS IMPROVEMENT</strong>${summaryList(operator.needsImprovement, "No metric below the current rule threshold")}</div>
+      <small>${escapeHtml(operator.note)}</small>`;
     elements.reportModal.hidden = false;
   }
 
@@ -1375,6 +1625,15 @@ TERMINAL
     updateSlaTimers();
   }
 
+  function handleModalKeydown(event) {
+    if (event.key !== "Escape") return;
+    if (!elements.endShiftConfirmModal.hidden) {
+      closeEndShiftConfirmation();
+      return;
+    }
+    if (!elements.historyModal.hidden) closeHistory();
+  }
+
   function initializeGame() {
     elements.rackGrid.addEventListener("click", handleRackSelection);
     elements.incidentQueue.addEventListener("click", handleQueueSelection);
@@ -1387,6 +1646,15 @@ TERMINAL
     elements.endShiftBtn.addEventListener("click", openEndShiftConfirmation);
     elements.cancelEndShiftBtn.addEventListener("click", closeEndShiftConfirmation);
     elements.confirmEndShiftBtn.addEventListener("click", confirmManualEndShift);
+    elements.historyOpenBtn.addEventListener("click", openHistory);
+    elements.historyCloseBtn.addEventListener("click", closeHistory);
+    elements.historyCategoryFilters.addEventListener("click", handleHistoryFilter);
+    elements.historySlaFilters.addEventListener("click", handleHistoryFilter);
+    elements.historyList.addEventListener("click", handleHistorySelection);
+    elements.historyModal.addEventListener("click", (event) => {
+      if (event.target === elements.historyModal) closeHistory();
+    });
+    document.addEventListener("keydown", handleModalKeydown);
     elements.newShiftBtn.addEventListener("click", startNewShift);
     elements.terminalForm.addEventListener("submit", handleTerminalSubmit);
     elements.terminalClearBtn.addEventListener("click", clearTerminalSession);

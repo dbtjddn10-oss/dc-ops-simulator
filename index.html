@@ -41,6 +41,7 @@
           <button class="difficulty-btn hard" type="button" data-difficulty="HARD" aria-pressed="false">HARD</button>
         </div>
         <small class="difficulty-summary" id="difficultySummary">SLA ×1.00 · SCORE ×1.00 · INVESTIGATION OPTIONAL</small>
+        <button class="history-open-btn" id="historyOpenBtn" type="button">해결 기록 · INCIDENT HISTORY <span id="historyButtonCount">0</span></button>
         <button class="shift-start-btn" id="startShiftBtn" type="button">교대 시작 · START SHIFT</button>
         <button class="shift-end-btn" id="endShiftBtn" type="button" disabled hidden>교대 종료 · END SHIFT</button>
       </div>
@@ -207,6 +208,50 @@
     </div>
   </section>
 
+  <section class="history-modal" id="historyModal" role="dialog" aria-modal="true" aria-labelledby="historyTitle" hidden>
+    <div class="history-card">
+      <header class="history-heading">
+        <div>
+          <p class="eyebrow">CURRENT SHIFT · RESOLVED ONLY</p>
+          <h2 id="historyTitle">INCIDENT HISTORY</h2>
+          <p>현재 Shift에서 해결 완료된 Incident와 RCA 기록입니다.</p>
+        </div>
+        <button class="modal-close-btn" id="historyCloseBtn" type="button" aria-label="Incident History 닫기">CLOSE ×</button>
+      </header>
+      <div class="history-filters" aria-label="Incident History 필터">
+        <div class="history-filter-group" id="historyCategoryFilters" role="group" aria-label="Category 필터">
+          <span>CATEGORY</span>
+          <button type="button" data-history-category="ALL" aria-pressed="true" class="selected">ALL</button>
+          <button type="button" data-history-category="SERVER" aria-pressed="false">SERVER</button>
+          <button type="button" data-history-category="STORAGE" aria-pressed="false">STORAGE</button>
+          <button type="button" data-history-category="NETWORK" aria-pressed="false">NETWORK</button>
+          <button type="button" data-history-category="POWER" aria-pressed="false">POWER</button>
+          <button type="button" data-history-category="COOLING" aria-pressed="false">COOLING</button>
+        </div>
+        <div class="history-filter-group" id="historySlaFilters" role="group" aria-label="SLA 필터">
+          <span>SLA</span>
+          <button type="button" data-history-sla="ALL" aria-pressed="true" class="selected">ALL</button>
+          <button type="button" data-history-sla="MET" aria-pressed="false">SLA MET</button>
+          <button type="button" data-history-sla="BREACHED" aria-pressed="false">SLA BREACHED</button>
+        </div>
+      </div>
+      <div class="history-layout">
+        <section class="history-list-panel" aria-labelledby="historyListTitle">
+          <div class="history-list-heading"><h3 id="historyListTitle">RESOLVED INCIDENTS</h3><span id="historyResultCount">0 RECORDS</span></div>
+          <div class="history-list" id="historyList"></div>
+          <p class="history-empty" id="historyEmpty">NO RESOLVED INCIDENTS</p>
+        </section>
+        <article class="history-detail" id="historyDetail" aria-live="polite">
+          <div class="history-detail-empty" id="historyDetailEmpty">
+            <span>INCIDENT REPORT</span>
+            <strong>SELECT A RESOLVED TICKET</strong>
+          </div>
+          <div id="historyDetailContent" hidden></div>
+        </article>
+      </div>
+    </div>
+  </section>
+
   <section class="report-modal" id="reportModal" role="dialog" aria-modal="true" aria-labelledby="reportTitle" hidden>
     <div class="report-card">
       <p class="eyebrow">SHIFT COMPLETE</p>
@@ -230,6 +275,14 @@
         <div><small>DIFFICULTY</small><strong class="report-difficulty" id="reportDifficulty">NORMAL</strong></div>
         <div><small>INVESTIGATION COVERAGE</small><strong id="reportInvestigationCoverage">OPTIONAL</strong></div>
       </div>
+      <section class="report-analysis" aria-labelledby="categoryPerformanceTitle">
+        <div class="report-section-heading"><div><p class="eyebrow">OPERATIONS ANALYTICS</p><h3 id="categoryPerformanceTitle">CATEGORY PERFORMANCE</h3></div></div>
+        <div class="category-performance" id="reportCategoryPerformance"></div>
+      </section>
+      <section class="report-analysis" aria-labelledby="operatorSummaryTitle">
+        <div class="report-section-heading"><div><p class="eyebrow">CURRENT SHIFT ONLY</p><h3 id="operatorSummaryTitle">OPERATOR SUMMARY</h3></div></div>
+        <div class="operator-summary" id="reportOperatorSummary"></div>
+      </section>
       <button class="new-shift-btn" id="newShiftBtn" type="button">새 교대 시작 · NEW SHIFT</button>
     </div>
   </section>
@@ -237,6 +290,7 @@
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script src="incidents.js"></script>
+  <script src="analytics.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

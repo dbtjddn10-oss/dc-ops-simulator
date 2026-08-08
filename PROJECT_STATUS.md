@@ -1,204 +1,233 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
 최종 업데이트: 2026-08-08  
-현재 버전: **v0.7 — Expanded Incident Catalog & Category System**
+현재 버전: **v0.8 — Incident History & RCA Analytics System**
 
 외부 라이브러리나 설치 과정 없이 `index.html`을 열어 실행하는 데이터센터 야간 운영 시뮬레이션 웹게임이다.
 
 ## 1. 현재 버전
 
-**v0.7 — Expanded Incident Catalog & Category System**
+**v0.8 — Incident History & RCA Analytics System**
 
-v0.6의 Night Shift, EASY/NORMAL/HARD, Queue, SLA, Diagnosis/Action, Linux Terminal, Investigation Evidence, Hard Gate, Shift Report와 Incident History를 유지하면서 Incident를 5종에서 15종으로 확장했다.
+v0.7의 EASY/NORMAL/HARD, Night Shift, 15종 Incident와 5개 Category, Queue, SLA, Diagnosis/Action, Linux Terminal, Investigation Evidence, Hard Gate, Shift Report를 유지하면서 해결된 Incident를 조회하는 History와 규칙 기반 RCA, Category/Operator Analytics를 추가했다.
 
-## 2. Incident Catalog
+History는 **CURRENT SHIFT HISTORY** 범위다. NEW SHIFT 또는 새로고침 후 초기화되며 LocalStorage 영구 저장은 아직 사용하지 않는다.
 
-Incident는 총 **15개**이며 5개 Category에 각각 3개씩 등록되어 있다.
+## 2. Incident Catalog와 Difficulty Pool
 
-### SERVER
+Incident는 총 **15종**, Category는 **SERVER / STORAGE / NETWORK / POWER / COOLING**이며 각 Category에 3종씩 있다.
 
-- `INC-001` Nginx Service Down
-- `INC-003` High CPU Load
-- `INC-006` Memory Pressure / OOM
+- EASY: 7종
+- NORMAL: 12종
+- HARD: 15종
+- Severity: P1 2종 / P2 12종 / P3 1종
+- Category-aware Diagnosis/Action distractor 유지
+- 직전 Incident 즉시 반복 방지 유지
 
-### STORAGE
+`incidents.js`의 Catalog validation이 필수 필드, 중복 ID, Category, minDifficulty, usefulCommands와 diagnosticCommands를 검사한다.
 
-- `INC-002` Disk Usage Critical
-- `INC-007` Disk I/O Latency
-- `INC-008` Filesystem Read-Only
+## 3. Incident History
 
-### NETWORK
+기존 `game.incidentHistory`를 현재 Shift에서 해결된 Ticket 전용 목록으로 사용한다.
 
-- `INC-004` Network Port Blocked
-- `INC-009` DNS Resolution Failure
-- `INC-010` Network Interface Packet Errors
+- Incident Queue: 현재 처리 중인 **OPEN** Ticket
+- Incident History: 해결 완료된 **RESOLVED** Ticket
+- 기본 정렬: `resolvedAt` 내림차순, 최근 해결 건 우선
+- Category Filter: ALL / SERVER / STORAGE / NETWORK / POWER / COOLING
+- SLA Filter: ALL / SLA MET / SLA BREACHED
+- Empty State: `NO RESOLVED INCIDENTS`
+- Modal UX: Open, Close, backdrop click, Escape
+- Desktop 2열 목록/상세 구조와 모바일 1열 반응형 구조
 
-### POWER
+History 목록에는 Ticket ID, Incident Title, Category, Severity, Rack, Difficulty, MTTR, SLA 결과와 해결 시각을 표시한다.
 
-- `INC-011` PSU Redundancy Lost
-- `INC-012` Rack PDU Feed A Lost
-- `INC-013` Input Voltage Instability
+## 4. Resolved Ticket Snapshot
 
-### COOLING
+`resolveIncident()`는 Rack의 원본 Ticket을 History에 그대로 보관하지 않고 `createResolvedRecord()`로 독립 snapshot을 만든다.
 
-- `INC-005` Cooling System Failure
-- `INC-014` Rack Fan Failure
-- `INC-015` Hot Aisle Temperature Spike
+복사 대상:
 
-각 Incident는 `incidentId`, `title`, `category`, `minDifficulty`, `severity`, 증상·원인·정답 조치, metrics, 점수·SLA, Easy Hint, usefulCommands와 diagnosticCommands를 가진다.
+- 기본 Incident/Ticket 필드와 Original/Applied SLA
+- `terminalHistory`
+- `investigationEvidence`
+- `countedUsefulCommands`
+- `eventHistory`
+- `diagnosisOptions` / `actionOptions`
+- Wrong Diagnosis / Wrong Action 기록
+- `diagnosticCommands`와 이전 Rack metrics
+- `awardedScore`, `mttrSeconds`, SLA state
 
-## 3. 난이도별 Incident Pool
+Rack의 `ticket`이 `null`이 된 뒤에도 History Detail과 RCA가 원래 대응 기록을 조회할 수 있다.
 
-`app.js`의 `DIFFICULTY_CONFIG.rank`와 `getAvailableIncidents(difficulty)`가 `minDifficulty`를 비교한다.
+## 5. Ticket eventHistory와 Timeline
 
-### EASY — 7종
+각 Ticket은 전역 Event Log와 별도로 대응 흐름 재구성에 필요한 최소 이벤트만 가진다.
 
-`INC-001`, `INC-002`, `INC-003`, `INC-004`, `INC-005`, `INC-006`, `INC-009`
+- `INCIDENT_CREATED`
+- `COMMAND_EXECUTED`
+- `EVIDENCE_CAPTURED`
+- `DIAGNOSIS_STARTED`
+- `WRONG_DIAGNOSIS`
+- `DIAGNOSIS_CONFIRMED`
+- `WRONG_ACTION`
+- `RECOVERY_COMPLETED`
+- `SLA_BREACHED`
 
-### NORMAL — 12종
+모든 event timestamp는 실제 동작 시점의 `Date.now()`를 사용한다. Timeline은 저장된 이벤트만 시간순으로 보여주며 존재하지 않는 시각을 추측하지 않는다.
 
-EASY 7종 + `INC-007`, `INC-010`, `INC-011`, `INC-014`, `INC-015`
+## 6. Incident Detail과 RCA
 
-### HARD — 15종
+History 항목을 선택하면 다음을 보여준다.
 
-NORMAL 12종 + `INC-008`, `INC-012`, `INC-013`
+- Incident Summary: Ticket/Incident ID, Title, Category, Severity, Difficulty, Rack, Symptom, 생성/해결 시각, MTTR, Original/Applied SLA, SLA 결과
+- Root Cause: correctDiagnosis와 rootCause
+- Recovery: correctAction과 awardedScore
+- Investigation: 실행 명령 요약, useful evidence, invalid command 수, Evidence 충족 상태
+- Terminal Evidence Detail: `details/summary`로 simulated output을 필요할 때만 펼침
+- Incident Timeline
+- Root Cause Analysis
 
-- Ticket 생성 시 현재 Shift 난이도에 맞는 Pool에서만 선택한다.
-- Pool에 여러 Incident가 있으면 `game.lastIncidentId`를 제외해 즉시 같은 장애가 반복되지 않게 한다.
-- NEW SHIFT에서 `lastIncidentId`도 초기화한다.
+`analytics.js`의 `buildIncidentReport(ticket)`와 `buildLessonsLearned(ticket)`가 화면 렌더링과 분리된 Report 데이터를 만든다.
 
-## 4. Category와 Severity
+RCA 구성:
 
-- `category`는 SERVER/STORAGE/NETWORK/POWER/COOLING처럼 장애의 운영 분야를 나타낸다.
-- `severity`는 대응 우선순위를 나타내며 Queue 정렬에 사용한다.
-- Open Incident가 있는 Rack은 기존 규칙대로 Critical로 표시되므로 Rack Health와 Ticket Priority는 별도 개념이다.
+1. What Happened
+2. Symptoms
+3. Investigation
+4. Root Cause
+5. Recovery Action
+6. SLA / MTTR Result
+7. Lessons Learned
 
-Severity 구성:
+Lessons Learned는 외부 AI/API를 호출하지 않는다. Category, useful command 조합, Evidence 충족 여부와 Terminal 기록을 규칙으로 평가해 문장을 선택한다.
 
-- **P1:** Cooling System Failure, Rack PDU Feed A Lost
-- **P3:** PSU Redundancy Lost
-- **P2:** 나머지 12개 Incident
+## 7. Time Format
 
-Ticket과 Incident Queue에는 Category badge가 표시된다.
+`analytics.js`의 공통 formatter를 History, RCA와 Analytics에서 재사용한다.
 
-## 5. Category-aware Diagnosis / Action
+- 60초 미만: `37.2s`
+- 60초 이상: `1m 14.6s`
+- Timestamp: `22:14:08`
 
-`createChoiceOptions()`는 정답 외 오답 2개를 만들 때 다음 순서로 후보를 찾는다.
+## 8. Category Analytics
 
-1. 현재 Ticket과 같은 Category의 다른 Incident를 무작위로 섞는다.
-2. 같은 Category 후보를 먼저 사용한다.
-3. 후보가 부족할 때만 다른 Category에서 보충한다.
-4. 정규화한 label Set으로 같은 문구의 중복을 차단한다.
+Shift Report의 **CATEGORY PERFORMANCE**가 현재 Shift 데이터를 Category별로 계산한다.
 
-현재는 Category마다 3개 Incident가 있으므로 Diagnosis와 Action 모두 정답 1개 + 같은 Category 오답 2개 구성이 가능하다.
+- Generated: 해결 History + 종료 시점 Open Ticket
+- Resolved: 해결 History
+- SLA Breached: 해결 및 Open Ticket 중 breach된 수
+- Average MTTR: 해당 Category의 해결 Record 평균
+- SLA Compliance: 해당 Category에서 해결된 Record 기준
 
-## 6. Linux Terminal 확장
+통계는 외부 서버 없이 현재 메모리 데이터만 사용한다.
 
-추가된 simulated command:
+## 9. Operator Summary
 
-```text
-dmesg
-iostat
-mount
-nslookup [host]
-cat /etc/resolv.conf
-ethtool eth0
-ipmitool sensor
-```
+Shift Report의 **OPERATOR SUMMARY**는 현재 게임 Shift의 지표만 규칙 기반으로 요약한다.
 
-기존 구조를 유지한다.
+- SLA Compliance
+- Diagnosis Accuracy
+- Action Accuracy
+- Average MTTR와 Average Applied SLA 비교
 
-```text
-정상 Rack → app.js의 DEFAULT_TERMINAL_OUTPUTS
-Incident Rack → incidents.js의 diagnosticCommands가 같은 command 출력을 override
-```
+각 지표를 `STRONG` 또는 `NEEDS IMPROVEMENT`로 분류한다. 실제 사람의 능력이나 고용 평가를 의미하지 않는다는 안내 문구를 함께 표시한다.
 
-- 정상 Rack의 dmesg, Storage, DNS, NIC, PSU/FAN/TEMP 출력은 정상 상태를 보여준다.
-- Memory OOM은 free/top/dmesg가 같은 메모리 고갈 상황을 보여준다.
-- Disk I/O는 용량 부족이 아닌 높은 iowait/await/%util을 보여준다.
-- Filesystem 장애는 mount의 `ro`와 dmesg의 EXT4 remount 기록이 일치한다.
-- DNS 장애는 IP ping은 성공하지만 nslookup과 resolver 설정이 실패 원인을 보여준다.
-- NIC 장애는 ethtool의 RX/TX/CRC error와 Packet loss를 보여준다.
-- Power/Cooling 장애는 `ipmitool sensor`와 별도 Sensor Alert를 함께 사용한다.
+## 10. Investigation Coverage 변경
 
-## 7. Hard Investigation Gate
+v0.7은 해결된 Hard Ticket만 계산해 대부분 100%가 되는 한계가 있었다.
 
-- Hard에 등장하는 15개 Incident 모두 최소 1개의 `usefulCommands`를 가진다.
-- unique usefulCommands가 1개면 Evidence 1개, 2개 이상이면 2개가 필요하다.
-- 같은 canonical command 반복, 잘못된 명령, 관계없는 명령은 Evidence로 다시 집계하지 않는다.
-- Ticket별 Terminal History, Evidence와 단계 상태가 Rack 이동 후에도 유지된다.
-
-## 8. Data Validation
-
-`incidents.js`의 `validateIncidentCatalog()`가 로드 시 다음을 검사한다.
-
-- 필수 19개 필드 누락
-- 중복 incidentId
-- 유효하지 않은 Category/minDifficulty
-- 비어 있거나 중복만 있는 usefulCommands
-- diagnosticCommands 객체 형식
-- 난이도별 Pool 개수와 Category별 개수 요약
-
-현재 결과:
-
-- Total: 15
-- Duplicate ID: 0
-- Category: 각 3개
-- Pool: EASY 7 / NORMAL 12 / HARD 15
-- Hard 진행 불가 Incident: 0
-
-## 9. 프로젝트 파일 구조
+v0.8은 Shift 종료 시 다음 전체를 계산한다.
 
 ```text
-dc-ops-demo/
-├── index.html        # Shift, Ticket Category, Queue, Terminal와 Report UI
-├── styles.css        # NOC 디자인, Category badge와 반응형 레이아웃
-├── app.js            # 난이도 Pool, 선택지, Terminal, Shift/Incident/SLA 게임 엔진
-├── incidents.js      # 15종 Incident 데이터, Terminal override와 validation
-└── PROJECT_STATUS.md # 버전, 구조, Known Issues와 검증 결과
+현재 Shift의 모든 Hard Incident
+= 해결된 Hard History + 해결되지 않은 Open Hard Ticket
 ```
 
-## 10. Known Issues
+- required Evidence 충족: completed
+- required Evidence 미충족: incomplete
+- Coverage: completed / 전체 Hard Incident × 100
 
-이번 Content Expansion에서 핵심을 방해하지 않는 기존 자잘한 문제는 유지했다.
+기존 Hard Diagnosis Gate의 진행 로직은 그대로 유지한다.
+
+## 11. 테스트 구조
+
+외부 프레임워크나 설치 과정 없이 실행 가능한 `tests/run-tests.js`를 추가했다. 브라우저에서 사용하는 `analytics.js`를 Node에서도 그대로 불러 순수 로직을 검사한다.
+
+자동 테스트 대상:
+
+- Incident Catalog validation
+- 15개 고유 ID와 Category별 3개 구성
+- Difficulty Pool 7 / 12 / 15
+- MTTR seconds/minutes formatting
+- History 최신순 정렬
+- Category + SLA Filter
+- Category statistics
+- 미해결 Ticket을 포함한 Investigation Coverage
+- RCA report와 Lessons Learned
+- Operator Summary 규칙
+
+실행 예:
+
+```powershell
+node tests\run-tests.js
+```
+
+## 12. 프로젝트 파일 구조
+
+```text
+dc-ops-simulator/
+├── index.html          # Shift, Queue, Terminal, History/Report Modal UI
+├── styles.css          # NOC 디자인, History/RCA/Analytics와 반응형 레이아웃
+├── incidents.js        # 15종 Incident 데이터와 Catalog validation
+├── analytics.js        # History Filter, MTTR, RCA, Category/Operator 순수 로직
+├── app.js              # 게임 엔진, Ticket eventHistory, Snapshot과 UI 연결
+├── tests/
+│   └── run-tests.js    # 설치 없는 Node 자동 테스트
+└── PROJECT_STATUS.md   # 버전, 구조, Known Issues와 검증 결과
+```
+
+## 13. Known Issues
+
+History/RCA 핵심과 직접 관련 없는 기존 작은 문제는 유지했다.
 
 - Difficulty별 Score 배율과 Score 카드의 초기 `복구 시 +100 PTS` 문구가 일치하지 않는다.
-- Hard Investigation Coverage는 Gate 구조상 해결된 Ticket에서 대부분 100%가 되어 통계적 의미가 작다.
 - Terminal의 `clear` 명령도 RUNNING 중 `commandsExecuted`에 포함된다.
 - ping/curl/nslookup은 target별 모든 세부 경우를 재현하지 않는 학습용 시뮬레이션이다.
-- 새로고침하면 현재 교대와 기록이 초기화되며 저장 기능이 없다.
+- 새로고침하거나 NEW SHIFT를 시작하면 History를 포함한 현재 교대 기록이 초기화되며 영구 저장 기능이 없다.
 - Incident/SLA/점수/자동 생성 간격은 추가 플레이 테스트 후 밸런스 조정이 필요하다.
 - 자동 Incident가 모든 Rack을 채운 뒤에도 예약 시점마다 가용 Rack을 확인해 경고 Log가 남을 수 있다.
 - 점수의 최솟값 제한이 없어 음수가 될 수 있다.
 - 백그라운드 탭에서는 화면 갱신이 늦어질 수 있지만 시간 계산은 `Date.now()` 기준이다.
 - Terminal은 실제 Linux shell의 권한, pipe, redirect, option 전체를 구현하지 않는다.
-- Incident History는 내부 데이터로 보존되지만 별도 History 화면은 없다.
+- History는 현재 Shift 메모리 범위이며 검색, pagination, export 기능은 없다.
 
-## 11. 검증 결과
+## 14. 검증 결과
 
-- JavaScript 문법, HTML ID 중복과 DOM 참조 검사 통과
-- Incident validation: 15종, ID 중복 0, Category 3개씩, Pool 7/12/15 확인
-- 브라우저 **469개 검사 항목 통과, 실패 0개**
-- Easy 7종과 Normal 12종을 실제 랜덤 Pool에서 모두 생성·복구
-- Hard 15종을 Evidence 수집 → Diagnosis → Action으로 모두 해결
-- 직전 Incident 즉시 반복 방지 확인
-- Diagnosis/Action의 같은 Category 우선 선택지 확인
-- 새 명령 7개의 정상 Rack 출력 확인
-- 새 Incident 10종의 diagnosticCommands override 확인
-- Power/Cooling Sensor Alert 확인
-- P1/P2/P3 Queue 표시와 Category badge 확인
-- 다중 Incident Queue, SLA timer, 오답 감점, 중복 감점 차단 확인
-- Easy/Hard score multiplier와 Hard SLA multiplier 확인
-- Terminal History와 Evidence의 Rack 전환 보존 확인
-- Warning Rack의 이전 상태와 metrics 복원 확인
-- 수동/자동 END SHIFT, Report, NEW SHIFT, Timer 정리 확인
-- 기본 실행값 NORMAL / 03:00 / Rack 6개와 반응형 breakpoint 확인
+- JavaScript 문법 검사 통과: `incidents.js`, `analytics.js`, `app.js`, `tests/run-tests.js`
+- HTML ID 중복 0, `app.js` DOM selector 누락 0
+- `git diff --check` 오류 0
+- 자동 테스트 **13개 통과, 실패 0개**
+- Incident Catalog 15종, Category 각 3종, Pool EASY 7 / NORMAL 12 / HARD 15 확인
+- EASY에서 Terminal Evidence → Wrong Diagnosis → Diagnosis Confirmed → Wrong Action → Recovery 흐름 확인
+- 해결된 Incident가 History에 정확히 1건씩 추가되고 다중 History가 독립적으로 유지되는 것 확인
+- History 최근 해결 순 정렬, Category/SLA Filter와 Empty State 확인
+- Detail의 Summary, Root Cause, Recovery, Command/Evidence, MTTR, Applied SLA와 SLA 결과 확인
+- Ticket Timeline의 Command, Evidence, Wrong Diagnosis/Action, SLA Breach, Recovery event 확인
+- 규칙 기반 RCA와 Lessons Learned 확인
+- History Modal Close, Escape, backdrop click 확인
+- Shift Report의 Category Performance와 Operator Summary 확인
+- 해결되지 않은 Hard Ticket을 포함한 Investigation Coverage `0.0%` 사례 확인
+- NEW SHIFT History 초기화 확인
+- 자동 Incident 생성과 Shift 종료 후 Timer cleanup 확인
+- 375px 모바일 viewport에서 History Modal 수평 overflow 없음
+- 브라우저 콘솔 JavaScript error 0개
 
-## 12. 다음 추천 버전
+## 15. 다음 추천 버전
 
-### v0.7.1 — Content Balance & Automated Tests
+### v0.9 — Persistent Operations Archive & RCA Export
 
-1. 15종별 평균 해결 시간과 오답률을 기록해 SLA와 score를 조정한다.
-2. Incident validation, Pool, distractor, parser를 별도 자동 테스트 파일로 분리한다.
-3. Shift Report에 Category별 발생/해결 통계와 Evidence 요약을 추가한다.
-4. Keyboard command history와 자동완성을 추가해 Terminal UX를 개선한다.
+1. LocalStorage schema version을 두고 Shift History를 영구 보존한다.
+2. CURRENT SHIFT와 ARCHIVED SHIFT를 분리해 날짜/Category/SLA 검색을 추가한다.
+3. `buildIncidentReport()` 결과를 JSON 또는 Markdown RCA로 export한다.
+4. History pagination과 Shift 간 Category trend를 추가한다.
+5. 저장 데이터 migration과 corrupt data 복구 테스트를 추가한다.
