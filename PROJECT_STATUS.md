@@ -98,7 +98,7 @@ Incident마다 기본 score가 다르므로 하나의 예상 점수를 보여주
 - `main` push
 - pull request
 
-Job은 Ubuntu와 Node.js 22 LTS를 사용하며 다음을 순서대로 실행한다.
+Job은 Ubuntu와 Node.js 24 LTS를 사용하며 다음을 순서대로 실행한다. GitHub-hosted runner의 Node 20 action runtime deprecation warning을 피하기 위해 공식 문서의 현재 major인 `actions/checkout@v7`과 `actions/setup-node@v7`을 사용한다.
 
 1. repository checkout
 2. JavaScript syntax checks
