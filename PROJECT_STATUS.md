@@ -1,288 +1,222 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
 최종 업데이트: 2026-08-08  
-현재 버전: **v0.9 — Persistent Shift Archive & Operations Records**
+현재 버전: **v0.10 — Production Readiness & Portfolio Polish**
 
-외부 라이브러리나 설치 과정 없이 `index.html`을 열어 실행하는 데이터센터 야간 운영 시뮬레이션 웹게임이다.
+외부 런타임 라이브러리나 빌드 과정 없이 브라우저에서 실행되는 데이터센터 Incident 대응 학습용 시뮬레이터다. 실제 Linux shell, 운영 인프라, backend, database 또는 AWS API와 연결되지 않는다.
 
-## 1. 현재 버전
+## 1. v0.10 목표와 범위
 
-**v0.9 — Persistent Shift Archive & Operations Records**
+v0.10은 대규모 기능 추가 대신 v0.9 기능을 안정화하고 공개 portfolio repository로서의 완성도를 높이는 버전이다.
 
-v0.8의 15종 Incident, EASY/NORMAL/HARD, Queue, SLA, Diagnosis/Action, Linux Terminal, Hard Investigation Gate, Current Shift Incident History, Timeline, RCA, Category Analytics와 Operator Summary를 유지한다.
+- 기존 Known Issues 중 score, terminal 통계, full-rack 경고 문제 해결
+- UI/접근성/modal/mobile 기본 품질 개선
+- 영문 `README.md`와 실제 구조 기반 Mermaid diagram 추가
+- `.gitattributes`, `.gitignore`, dependency-free `package.json` 추가
+- GitHub Actions CI 추가
+- 자동 테스트와 브라우저 회귀 범위 확장
+- v1.0 AWS static deployment 준비
 
-v0.9는 완료된 Shift를 독립 Snapshot으로 만들어 브라우저 LocalStorage에 저장하고 과거 교대 기록을 조회하는 Shift Archive를 추가했다.
+## 2. 해결된 Known Issues
 
-```text
-CURRENT SHIFT
-현재 실행 중인 Rack, Queue, Timer, Terminal, Incident History
+### Score 안내와 실제 계산 일치
 
-SHIFT ARCHIVE
-종료가 확정된 과거 Shift Snapshot의 영구 기록
-```
-
-NEW SHIFT는 Current Shift만 초기화하며 Archive는 삭제하지 않는다.
-
-## 2. LocalStorage Schema
-
-저장 key:
+고정 문구 `복구 시 +100 PTS`를 제거했다. Idle 상태의 Score card는 선택한 Difficulty의 실제 multiplier를 표시한다.
 
 ```text
-dcOpsShiftArchive
+EASY   RECOVERY REWARD · DIFFICULTY ×0.85
+NORMAL RECOVERY REWARD · DIFFICULTY ×1.00
+HARD   RECOVERY REWARD · DIFFICULTY ×1.25
 ```
 
-현재 저장 구조:
+Incident마다 기본 score가 다르므로 하나의 예상 점수를 보여주지 않고 multiplier 자체를 정확히 안내한다.
 
-```js
-{
-  schemaVersion: 1,
-  nextShiftSequence: 4,
-  shifts: [/* latest Shift first */]
-}
-```
+### Negative Score 방지
 
-- `CURRENT_SCHEMA_VERSION`: 1
-- `MAX_ARCHIVED_SHIFTS`: 50
-- 50개를 초과하면 가장 오래된 Shift부터 제외
-- `nextShiftSequence`로 `SHIFT-0001`, `SHIFT-0002` 형식의 ID 생성
-- 미래의 지원하지 않는 schema를 발견하면 읽거나 덮어쓰지 않고 안전하게 보존
+모든 런타임 score 증감은 `Analytics.applyScoreDelta()`를 거치며 최저 0점을 적용한다. 미진단 복구, 오진, 잘못된 Action, SLA breach가 연속되어도 score가 음수가 되지 않는다.
 
-## 3. storage.js 역할
+### Terminal utility 통계 분리
 
-LocalStorage 직접 접근은 `storage.js`에 격리했다.
+`clear`와 `help`는 `UTILITY`, 허용된 조사 명령은 `INVESTIGATION`, 잘못된 명령은 `INVALID`로 분류한다. Utility 명령은 `commandsExecuted`에 포함하지 않는다. 잘못된 명령은 실행 시도와 invalid 통계에 포함한다.
 
-- `loadArchive()`
-- `saveArchive()`
-- `addShiftRecord()`
-- `deleteShiftRecord()`
-- `clearArchive()`
-- `validateArchive()`
-- `isValidShiftRecord()`
+### Full-Rack 자동 경고 dedupe
 
-처리 원칙:
+모든 Rack에 Incident가 있을 때 자동 scheduler는 해당 full 상태에서 경고를 한 번만 기록한다. 수동 생성 실패는 매번 사용자에게 안내한다. Rack 하나가 복구되어 capacity가 생기면 dedupe 상태를 reset하므로 다음 full 상태에서는 다시 한 번 경고한다.
 
-- JSON parse 실패: 빈 Archive fallback과 console warning
-- 잘못된 root/schema: 게임 실행을 막지 않고 안전하게 무시
-- 손상된 개별 Shift: 전체 Archive 대신 해당 Record만 제외
-- 중복 Shift ID: 최신 Record 하나만 유지
-- LocalStorage 접근/용량 오류: Shift Report는 유지하고 작은 안내와 warning 표시
-- 지원하지 않는 미래 schema: v1 데이터로 자동 덮어쓰지 않음
+### Target-bearing Terminal 출력
 
-## 4. Shift Snapshot
+`ping`, `curl`, `nslookup`, `traceroute`에 explicit target이 있으면 기본 safe simulation output이 입력 target을 일관되게 표시한다. 실제 DNS/network stack을 구현한 것은 아니다.
 
-`endShift()`가 통계를 확정한 뒤 `Analytics.createShiftSnapshot()`으로 저장에 필요한 값만 복사한다. `game` 전체, Timer ID, DOM 상태는 저장하지 않는다.
+### Modal 기본 관리
 
-저장 항목:
+- Incident History와 Shift Archive를 동시에 열지 않음
+- confirmation modal을 최우선 Escape 대상으로 처리
+- 열린 modal 내부에서 Tab focus 순환
+- modal이 열리면 body scroll 잠금
+- 닫은 뒤 관련 trigger button으로 focus 복귀
+- Shift Report가 열릴 때 다른 overlay 정리
 
-- Shift ID, schemaVersion, 시작/종료/지속 시간, 난이도, 종료 이유
-- Grade, Final Score, Availability
-- Generated, Resolved, Unresolved
-- SLA Breach/Compliance, Average MTTR
-- Diagnosis/Action Accuracy
-- Investigation Coverage, Commands/Useful/Invalid
-- Category Analytics Snapshot
-- Operator Summary Snapshot
-- Resolved Incident History
-- Unresolved Ticket Summary
+## 3. UI와 접근성
 
-Manual END SHIFT와 Timer 종료 모두 `archiveCompletedShift()` 한 경로를 사용한다. `shift.archived` guard로 한 Shift가 중복 저장되지 않게 한다.
+- title과 meta description을 simulator 범위에 맞게 정리
+- header에 `v0.10` build badge 표시; UI version은 `APP_VERSION`에서 설정
+- 상태 범례는 색상과 한국어/영문 text를 함께 사용
+- native `button`, 연결된 form label, dialog role, `aria-modal`, labelled/described dialog 유지
+- 전체 interactive element에 명확한 `:focus-visible` outline 추가
+- hover/disabled 상태와 modal/Archive card 간격 일관성 검토
+- footer에 local simulation과 live-system 미접속 범위 표시
+- 430px 이하 topbar/version/footer 보정과 기존 375px 단일-column layout 유지
 
-## 5. Archive Incident Data Size
+## 4. Repository 문서와 정책
 
-Resolved Ticket의 v0.8 Snapshot에서 과거 RCA 복원에 필요한 필드만 다시 압축한다.
+### README
 
-보존:
+`README.md`는 영문을 중심으로 다음을 설명한다.
 
-- Ticket/Incident ID, Title, Category, Severity, Rack, Difficulty
-- Symptom, Root Cause, Recovery Action
-- 생성/해결 시각, MTTR, SLA 상태와 Awarded Score
-- Terminal command, valid/useful, timestamp, simulated output
-- Evidence와 Ticket eventHistory
+- Overview와 제작 동기
+- Incident → Investigation → Evidence → Diagnosis → Recovery 흐름
+- 15 Incident와 5 Category
+- 실제 코드 구조 기반 Mermaid architecture
+- Project structure, testing, local run
+- safe simulated terminal 범위
+- limitations, roadmap, version milestones
 
-제외:
+구현되지 않은 backend, AWS service, database 또는 live shell을 구현된 것처럼 표현하지 않는다.
 
-- diagnosis/action option 배열
-- 이전 Rack metrics
-- Incident 전체 `diagnosticCommands` 사전
+### Line ending
 
-개별 Terminal output은 최대 4,000자로 제한한다. 저장 실패가 발생해도 현재 게임과 Shift Report는 계속 동작한다.
+`.gitattributes`는 JavaScript, HTML, CSS, Markdown, JSON, YAML을 repository에서 LF로 저장하도록 지정한다. 기존 전체 파일에 `git add --renormalize`를 수행하지 않아 line-ending-only 대규모 diff를 만들지 않는다.
 
-## 6. Shift Archive UI
+### Ignore와 package metadata
 
-`SHIFT ARCHIVE` 버튼은 Current Shift의 `INCIDENT HISTORY`와 별도다.
+`.gitignore`는 `node_modules/`, `.env`, `.env.*`, macOS/Windows metadata와 npm debug log를 제외한다. `package.json`에는 dependency 없이 `npm test`와 `npm run check` script만 있다.
 
-- Archive 목록은 `endedAt` 기준 최신순
-- 표시: Shift ID, 날짜, Difficulty, Grade, Score, Resolved/Generated, SLA Compliance, Average MTTR
-- Difficulty Filter: ALL / EASY / NORMAL / HARD
-- Grade Filter: ALL / S / A / B / C / D / F
-- Empty State: `NO ARCHIVED SHIFTS`
-- Close, Escape, backdrop click 지원
-- Desktop 2열 목록/상세와 모바일 1열 구조
+## 5. GitHub Actions CI
 
-## 7. Shift Detail
+`.github/workflows/ci.yml`은 다음 event에서 실행된다.
 
-선택한 Snapshot 자체의 저장 데이터를 사용하며 현재 게임 값으로 재계산하지 않는다.
+- `main` push
+- pull request
 
-- SHIFT SUMMARY: Started, Ended, Duration, Difficulty, End Reason, Grade, Score, Availability
-- OPERATIONS: Generated, Resolved, Unresolved, SLA Breached/Compliance, MTTR
-- ACCURACY: Diagnosis, Action
-- INVESTIGATION: Commands, Useful, Invalid, Coverage
-- CATEGORY PERFORMANCE
-- OPERATOR SUMMARY
-- PREVIOUS SHIFT COMPARISON
-- RESOLVED INCIDENT RECORDS
-- UNRESOLVED AT SHIFT END
+Job은 Ubuntu와 Node.js 22 LTS를 사용하며 다음을 순서대로 실행한다.
 
-## 8. Archive Incident History
+1. repository checkout
+2. JavaScript syntax checks
+3. dependency-free automated tests
 
-과거 Shift의 Resolved Incident를 선택하면 v0.8의 `buildIncidentDetailMarkup()`을 재사용한다.
+배포 단계는 포함하지 않는다.
 
-- Ticket, Category, Severity, Rack
-- MTTR와 SLA result
-- Command/Evidence Summary
-- Terminal Evidence Detail
-- Root Cause와 Recovery
-- 실제 timestamp 기반 Timeline
-- 규칙 기반 RCA와 Lessons Learned
+## 6. 자동 테스트
 
-Archive 목록 → Shift Detail → Incident Detail 순서로 단계적으로 이동하며 별도의 중첩 Modal을 만들지 않는다.
+`tests/run-tests.js`는 Node built-in module만 사용하며 **36개 check**를 포함한다.
 
-## 9. Unresolved Incident Snapshot
-
-Shift 종료 시 Open Ticket은 간단한 Summary로 저장한다.
-
-- Ticket/Incident ID와 Title
-- Category, Severity, Difficulty, Rack
-- 생성 시각과 종료 당시 stage
-- SLA Breached 여부
-- Evidence 수와 required Evidence
-
-과거 Shift에서 해결되지 않은 상태로 교대가 끝났다는 사실을 확인할 수 있다.
-
-## 10. Category와 Operator Snapshot
-
-Category별로 다음 결과를 저장 시점 그대로 보존한다.
-
-- Generated
-- Resolved
-- SLA Breached
-- SLA Compliance
-- Average MTTR
-
-Operator Summary의 `STRONG`, `NEEDS IMPROVEMENT`, 현재 게임 Shift만 평가한다는 안내 문구도 Snapshot에 저장한다.
-
-## 11. Previous Shift Comparison
-
-선택 Shift와 바로 이전의 더 오래된 Shift를 비교한다.
-
-- Score: 높을수록 개선
-- SLA Compliance: 높을수록 개선
-- Average MTTR: 낮을수록 개선
-- Diagnosis Accuracy: 높을수록 개선
-
-숫자 delta와 함께 `IMPROVED`, `DECLINED`, `UNCHANGED` 텍스트를 표시한다. MTTR에는 `lower is better`, 나머지에는 `higher is better` 안내를 함께 표시해 부호만으로 오해하지 않게 한다.
-
-## 12. Personal Best
-
-현재 브라우저 LocalStorage의 시뮬레이션 Archive에서 계산한다.
-
-- Highest Score
-- Best SLA Compliance
-- Fastest Average MTTR
-
-해결 Incident가 없는 Shift는 Fastest Average MTTR 후보에서 제외한다. 실제 고용이나 직무 능력 평가가 아니라 이 브라우저의 게임 기록임을 UI에 명시한다.
-
-## 13. Archive Delete와 Clear
-
-- `DELETE SHIFT`: 선택한 Shift 한 건만 confirmation 후 삭제
-- `CLEAR ALL RECORDS`: Archive 전체를 confirmation 후 삭제
-- Cancel 시 데이터 유지
-- 삭제 후 목록, Detail, Filter와 Personal Best를 즉시 다시 렌더링
-- NEW SHIFT와 Archive Clear는 완전히 다른 동작
-
-## 14. 자동 테스트
-
-외부 테스트 프레임워크 없이 `tests/run-tests.js`를 실행한다. MemoryStorage adapter로 Node에서도 LocalStorage 흐름을 검사한다.
-
-검사 대상:
-
-- v0.8 Catalog/Pool/History/RCA/Analytics 회귀
-- Archive empty load와 Save/Load
-- root/schema/개별 Shift validation
-- corrupted JSON과 unsupported schema
-- 미래 schema 비덮어쓰기
-- Shift Snapshot과 저장 데이터 압축
-- Terminal output 크기 제한
-- 고유 Shift ID와 중복 ID 제외
-- 최대 50개 제한
-- Delete/Clear
-- 최신순, Difficulty/Grade Filter 기반 순수 로직
+- Incident Catalog validation, unique ID, Category count
+- Difficulty pool 7 / 12 / 15
+- MTTR format, History sort/filter
+- Category Analytics, Hard Investigation Coverage
+- Score multiplier display consistency
+- Score minimum 0
+- Terminal utility/investigation/invalid 분류
+- Full-Rack auto warning dedupe와 capacity reset
+- RCA와 Operator Summary
+- Archive empty/save/load/schema/corruption/future-schema 처리
+- compact snapshot과 terminal output size limit
+- Shift ID, duplicate 제거, 최대 50개 제한
+- Delete/Clear, filter/sort
 - Previous Shift Comparison과 MTTR 방향
 - Personal Best
-- Current Shift reset이 Archive adapter를 지우지 않는 구조
+- Current Shift reset과 Archive 분리
 
-## 15. 프로젝트 파일 구조
+검증 결과: **36 passed, 0 failed**
+
+## 7. Browser Regression
+
+확인 완료:
+
+- v0.10 표시와 EASY/NORMAL/HARD multiplier
+- START SHIFT, manual/automatic Incident
+- full-rack auto warning 1회 및 Rack 복구 후 reset
+- explicit terminal target, typed `clear`, score floor 0
+- Diagnosis, Action, Recovery
+- Hard Investigation Gate 0/2 → 2/2 unlock
+- SLA breach와 Queue
+- Incident History, Timeline, RCA
+- automatic timer end와 manual confirmation end
+- Report에서 `clear` 제외 command count
+- NEW SHIFT 후 Archive 유지
+- Archive Difficulty filter, Shift comparison, Personal Best
+- Archive Incident RCA, 단일 Delete, Clear All, empty state
+- modal Escape, focus 복귀, body scroll lock
+- browser console error 0
+
+현재 in-app browser는 1280px에서 실제 렌더링과 visual check를 완료했다. 정확한 375px iframe viewport 생성은 browser URL 보안 정책이 차단하여 이번 run에서는 재현하지 못했다. 기존 375px 회귀 결과와 CSS breakpoint를 유지했고 변경된 mobile rule은 정적 검토했다. v1.0 공개 배포 전 실제 375px device emulation을 한 번 더 수행하는 것을 권장한다.
+
+## 8. 현재 파일 구조
 
 ```text
 dc-ops-simulator/
-├── index.html          # Current Shift, History, Archive/Report Modal UI
-├── styles.css          # NOC 디자인과 History/Archive 반응형 레이아웃
-├── incidents.js        # 15종 Incident Catalog와 validation
-├── storage.js          # LocalStorage schema, validation, CRUD와 50개 제한
-├── analytics.js        # RCA, Shift Snapshot, Comparison, Personal Best 순수 로직
-├── app.js              # 게임 엔진, 종료 저장 흐름과 Archive UI 연결
+├── .github/
+│   └── workflows/
+│       └── ci.yml
 ├── tests/
-│   └── run-tests.js    # 설치 없는 Node 자동 테스트
-└── PROJECT_STATUS.md
+│   └── run-tests.js
+├── .gitattributes
+├── .gitignore
+├── analytics.js
+├── app.js
+├── incidents.js
+├── index.html
+├── package.json
+├── PROJECT_STATUS.md
+├── README.md
+├── storage.js
+└── styles.css
 ```
 
-## 16. Known Issues
+## 9. 유지되는 Known Issues / Limitations
 
-Persistence 핵심과 직접 관련 없는 기존 작은 문제는 유지했다.
+- RUNNING Shift는 새로고침 후 복구되지 않는다.
+- Archive는 현재 browser profile/origin의 LocalStorage 범위이며 기기 간 공유되지 않는다.
+- schema v1 validation은 있지만 실제 migration runner는 없다.
+- Archive import/export와 cloud sync가 없다.
+- Terminal은 allowlist 기반 simulation이며 실제 shell, 권한, pipe, redirect, option 전체를 구현하지 않는다.
+- DNS/network/process/hardware output은 교육용 simulation이다.
+- background tab에서는 render timer가 일시 중지될 수 있다. elapsed time 계산은 `Date.now()` 기준이다.
+- Archive pagination, 검색, 장기 trend chart가 없다.
+- Incident 간격, SLA, penalty, grade는 더 넓은 playtest를 통한 tuning 여지가 있다.
 
-- 진행 중인 RUNNING Shift는 새로고침 후 복구되지 않는다. 새로고침 시 Current Shift는 초기화되지만 완료된 Shift Archive는 유지된다.
-- Archive는 브라우저 LocalStorage 범위다. 브라우저 데이터 삭제, private mode 종료, 다른 브라우저/기기에서는 공유되지 않는다.
-- 지원 schema는 현재 v1뿐이며 실제 migration 변환은 아직 없다.
-- Archive import/export와 cloud sync 기능은 없다.
-- Difficulty별 Score 배율과 Score 카드의 초기 `복구 시 +100 PTS` 문구가 일치하지 않는다.
-- Terminal의 `clear` 명령도 RUNNING 중 `commandsExecuted`에 포함된다.
-- ping/curl/nslookup은 target별 모든 세부 경우를 재현하지 않는 학습용 시뮬레이션이다.
-- Incident/SLA/점수/자동 생성 간격은 추가 플레이 테스트 후 밸런스 조정이 필요하다.
-- 자동 Incident가 모든 Rack을 채운 뒤에도 예약 시점마다 가용 Rack을 확인해 경고 Log가 남을 수 있다.
-- 점수의 최솟값 제한이 없어 음수가 될 수 있다.
-- 백그라운드 탭에서는 화면 갱신이 늦어질 수 있지만 시간 계산은 `Date.now()` 기준이다.
-- Terminal은 실제 Linux shell의 권한, pipe, redirect, option 전체를 구현하지 않는다.
-- Archive 검색, pagination과 다중 Shift trend chart는 없다.
+## 10. Error Handling과 Data Safety
 
-## 17. 검증 결과
+- LocalStorage unavailable, corrupted JSON, unsupported schema, corrupted record를 안전한 fallback으로 처리
+- Archive 저장 실패가 Shift Report와 현재 게임을 중단하지 않음
+- no available Rack, invalid terminal command, no selected Rack/Incident, empty History/Archive에 명시적 UI 제공
+- API key, password, token, AWS/GitHub credential 없음
+- repository 문서와 코드에 특정 사용자 PC의 절대 경로 없음
+- `.env*`는 Git ignore 대상
 
-- JavaScript 문법 검사 통과: `incidents.js`, `storage.js`, `analytics.js`, `app.js`, `tests/run-tests.js`
-- HTML ID 중복 0, `app.js` DOM selector 누락 0
-- `git diff --check` 오류 0
-- 자동 테스트 **32개 통과, 실패 0개**
-- Incident Catalog 15종, Category 각 3종, Pool EASY 7 / NORMAL 12 / HARD 15 확인
-- Manual/Automatic END SHIFT가 동일 Archive 경로에서 Shift를 1회만 저장하는 것 확인
-- SHIFT-0001 → SHIFT-0002 고유 ID 증가와 최신순 정렬 확인
-- 새로고침과 NEW SHIFT 후 Archive 유지 확인
-- Archive Difficulty/Grade Filter 확인
-- Shift Summary, Operations, Accuracy, Investigation과 Category/Operator Snapshot 확인
-- Unresolved Ticket 6건의 종료 Snapshot 확인
-- Previous Shift Comparison과 Personal Best 확인
-- Archive Incident의 RCA, Timeline, Terminal Evidence 재사용 확인
-- 단일 Delete Cancel/Confirm과 Clear All confirmation 확인
-- Current Incident History, RCA, Timeline 회귀 확인
-- Hard Investigation Gate 유지 확인
-- Timer cleanup과 중복 Archive 방지 확인
-- 375px 모바일 viewport에서 Archive 수평 overflow 없음
-- Archive Modal Escape/backdrop 닫기 확인
-- 브라우저 콘솔 JavaScript error 0개
+## 11. Portfolio Readiness Review
 
-## 18. 다음 추천 버전
+| 항목 | 판단 | 이유 |
+| --- | --- | --- |
+| README clarity | READY | 목적, 범위, workflow, 실행법, 한계를 명시 |
+| Code organization | NEEDS MINOR POLISH | 역할 분리는 명확하지만 `app.js`가 계속 큰 편 |
+| Testability | READY | 핵심 규칙을 pure helper와 36개 regression check로 보호 |
+| Git history continuity | READY | v0.7 → v0.8 → v0.9 → v0.10 milestone이 연속적 |
+| Data-center relevance | READY | Incident, evidence, SLA, MTTR, RCA, category 흐름이 명확 |
+| Simulation realism | NEEDS MINOR POLISH | 교육 목적에는 충분하지만 live shell/network는 아님 |
+| UI completeness | READY | core workflow, report, history, archive, empty/error 상태 포함 |
+| Deployment readiness | NEEDS MINOR POLISH | static build는 준비됐고 AWS 배포/공개 device 검증은 v1.0 범위 |
 
-### v1.0 — Portable Archive & Storage Migration
+종합 판단: **NEEDS MINOR POLISH**. 기능과 repository는 portfolio 공개 직전 단계이며, v1.0에서 실제 hosted URL, 375px device emulation, 배포 문서와 release screenshots를 완료하면 된다.
 
-1. Archive JSON/Markdown export와 검증된 JSON import를 추가한다.
-2. schema v1 → v2 migration runner와 rollback-safe 테스트를 추가한다.
-3. Shift pagination, 날짜 검색과 Category trend chart를 추가한다.
-4. 선택적인 RUNNING Shift recovery를 별도 key와 짧은 checkpoint로 구현한다.
-5. LocalStorage adapter 경계를 재사용해 DynamoDB/API adapter로 교체 가능한 비동기 repository interface를 설계한다.
+## 12. 다음 추천 버전
+
+### v1.0 — AWS Deployment & Portfolio Release
+
+1. AWS static hosting 구조 선택과 최소 권한 배포
+2. HTTPS, caching, error document, rollback 절차 문서화
+3. 공개 URL에서 desktop/mobile smoke test
+4. README screenshot과 짧은 operator walkthrough 추가
+5. GitHub Actions에 배포를 추가할 경우 test 성공 이후에만 실행
+
+v0.10 검증에서 즉시 별도 hotfix가 필요한 치명적 문제는 발견되지 않았다. 정확한 375px hosted/device 확인에서 layout regression이 발견될 경우에만 `v0.10.1`을 먼저 권장한다.

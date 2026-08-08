@@ -325,6 +325,31 @@
     return { highestScore, bestSla, fastestMttr };
   }
 
+  function formatScoreMultiplier(multiplier) {
+    const value = Number.isFinite(Number(multiplier)) ? Math.max(0, Number(multiplier)) : 0;
+    return `RECOVERY REWARD · DIFFICULTY ×${value.toFixed(2)}`;
+  }
+
+  function applyScoreDelta(currentScore, delta) {
+    const current = Number.isFinite(Number(currentScore)) ? Number(currentScore) : 0;
+    const change = Number.isFinite(Number(delta)) ? Number(delta) : 0;
+    return Math.max(0, Math.round(current + change));
+  }
+
+  function classifyTerminalCommand(canonical, normalized = "") {
+    if (!String(normalized).trim()) return "EMPTY";
+    if (canonical === "help" || canonical === "clear") return "UTILITY";
+    return canonical ? "INVESTIGATION" : "INVALID";
+  }
+
+  function getFullRackWarningTransition({ warningActive = false, hasAvailableRack = false, source = "auto" } = {}) {
+    if (hasAvailableRack) return { shouldLog: false, nextWarningActive: false };
+    return {
+      shouldLog: source === "manual" || !warningActive,
+      nextWarningActive: true
+    };
+  }
+
   const api = Object.freeze({
     CATEGORIES,
     formatDuration,
@@ -344,7 +369,11 @@
     sortArchivedShifts,
     filterArchivedShifts,
     compareShifts,
-    calculatePersonalBest
+    calculatePersonalBest,
+    formatScoreMultiplier,
+    applyScoreDelta,
+    classifyTerminalCommand,
+    getFullRackWarningTransition
   });
 
   global.DCOpsAnalytics = api;

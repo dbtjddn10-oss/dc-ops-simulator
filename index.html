@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="데이터센터 야간 운영 및 장애 대응 시뮬레이션 게임">
-  <title>DC OPS: NIGHT SHIFT</title>
+  <meta name="description" content="브라우저에서 데이터센터 Incident 조사, 진단, 복구, SLA 및 RCA 흐름을 연습하는 운영 시뮬레이터">
+  <title>DC OPS: NIGHT SHIFT — Data Center Incident Simulator</title>
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
@@ -17,7 +17,10 @@
           <p class="subtitle">데이터센터 야간 운영 시뮬레이션</p>
         </div>
       </div>
-      <div class="shift-badge"><span class="pulse-dot"></span><span>NOC ONLINE · NIGHT SHIFT</span></div>
+      <div class="topbar-status">
+        <div class="shift-badge"><span class="pulse-dot" aria-hidden="true"></span><span>NOC ONLINE · NIGHT SHIFT</span></div>
+        <span class="version-badge" aria-label="Application version">BUILD <strong id="appVersion">—</strong></span>
+      </div>
     </header>
 
     <section class="shift-console" aria-label="야간 교대 현황">
@@ -52,7 +55,7 @@
       <article class="stat-card" style="--accent: var(--cyan)">
         <div class="stat-label">현재 점수 · Score</div>
         <div class="stat-value" id="score">0<span class="stat-unit">PTS</span></div>
-        <div class="stat-trend" id="scoreTrend">복구 시 +100 PTS</div>
+        <div class="stat-trend" id="scoreTrend">RECOVERY REWARD · DIFFICULTY ×1.00</div>
       </article>
       <article class="stat-card" style="--accent: var(--green)">
         <div class="stat-label">서비스 가용성 · Availability</div>
@@ -195,6 +198,11 @@
       </form>
       <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
     </section>
+
+    <footer class="app-footer">
+      <span>DC OPS TRAINING CONSOLE</span>
+      <span>LOCAL SIMULATION · NO LIVE SYSTEM ACCESS</span>
+    </footer>
   </main>
 
   <section class="confirm-modal" id="endShiftConfirmModal" role="dialog" aria-modal="true" aria-labelledby="endShiftConfirmTitle" aria-describedby="endShiftConfirmDescription" hidden>

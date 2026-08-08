@@ -1,7 +1,8 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.9 설정 ----------------
+  // ---------------- v0.10 설정 ----------------
+  const APP_VERSION = "v0.10";
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -153,6 +154,7 @@
     selectedArchiveShiftId: null,
     selectedArchiveIncidentTicketId: null,
     archiveConfirmAction: null,
+    fullRackWarningActive: false,
     selectedDifficulty: "NORMAL",
     stats: createEmptyStats(),
     shift: {
@@ -283,10 +285,40 @@
     terminalInput: document.querySelector("#terminalInput"),
     terminalRunBtn: document.querySelector("#terminalRunBtn"),
     terminalClearBtn: document.querySelector("#terminalClearBtn"),
-    newShiftBtn: document.querySelector("#newShiftBtn")
+    newShiftBtn: document.querySelector("#newShiftBtn"),
+    appVersion: document.querySelector("#appVersion")
   };
 
   let toastTimer;
+
+  const managedModals = [
+    elements.reportModal,
+    elements.historyModal,
+    elements.archiveModal,
+    elements.endShiftConfirmModal,
+    elements.archiveConfirmModal
+  ];
+
+  function syncModalState() {
+    document.body.classList.toggle("modal-open", managedModals.some((modal) => !modal.hidden));
+  }
+
+  function showModal(modal, focusTarget) {
+    modal.hidden = false;
+    syncModalState();
+    focusTarget?.focus();
+  }
+
+  function hideModal(modal, returnFocus) {
+    modal.hidden = true;
+    syncModalState();
+    returnFocus?.focus();
+  }
+
+  function changeScore(delta) {
+    game.score = Analytics.applyScoreDelta(game.score, delta);
+    return game.score;
+  }
 
   function rackLabel(id) {
     return `Rack ${String(id).padStart(2, "0")}`;
@@ -569,7 +601,9 @@ TERMINAL
 
   function getTerminalOutput(rack, parsedCommand) {
     const ticketOutput = rack.ticket?.diagnosticCommands?.[parsedCommand.canonical];
-    if (typeof ticketOutput === "string") return ticketOutput;
+    const targetCommands = new Set(["ping", "curl", "nslookup", "traceroute"]);
+    const hasExplicitTarget = targetCommands.has(parsedCommand.canonical) && parsedCommand.normalized !== parsedCommand.canonical;
+    if (typeof ticketOutput === "string" && !hasExplicitTarget) return ticketOutput;
     const outputBuilder = DEFAULT_TERMINAL_OUTPUTS[parsedCommand.canonical];
     return outputBuilder ? outputBuilder(rack, parsedCommand.normalized) : "";
   }
@@ -654,11 +688,12 @@ TERMINAL
     const parsed = parseTerminalCommand(rawCommand);
     if (!parsed.normalized) return;
 
-    if (game.shift.status === "RUNNING") game.stats.commandsExecuted += 1;
-    if (parsed.canonical === "clear") {
+    const commandType = Analytics.classifyTerminalCommand(parsed.canonical, parsed.normalized);
+    if (commandType === "UTILITY" && parsed.canonical === "clear") {
       clearTerminalSession();
       return;
     }
+    if (game.shift.status === "RUNNING" && commandType !== "UTILITY") game.stats.commandsExecuted += 1;
 
     const ticket = rack.ticket;
     let valid = Boolean(parsed.canonical);
@@ -1026,15 +1061,14 @@ TERMINAL
   }
 
   function openHistory() {
+    hideModal(elements.archiveModal);
     updateHistoryFilters();
     renderHistory();
-    elements.historyModal.hidden = false;
-    elements.historyCloseBtn.focus();
+    showModal(elements.historyModal, elements.historyCloseBtn);
   }
 
   function closeHistory() {
-    elements.historyModal.hidden = true;
-    elements.historyOpenBtn.focus();
+    hideModal(elements.historyModal, elements.historyOpenBtn);
   }
 
   function handleHistoryFilter(event) {
@@ -1220,19 +1254,18 @@ TERMINAL
   }
 
   function openArchive() {
+    hideModal(elements.historyModal);
     game.archive = Storage.loadArchive();
     if (game.archive.warnings?.length) setArchiveNotice("일부 저장 기록을 읽지 못해 안전하게 제외했습니다.", "warning");
     else if (!game.archive.storageAvailable) setArchiveNotice("LocalStorage를 사용할 수 없어 Archive가 저장되지 않습니다.", "warning");
     else setArchiveNotice();
     renderArchive();
-    elements.archiveModal.hidden = false;
-    elements.archiveCloseBtn.focus();
+    showModal(elements.archiveModal, elements.archiveCloseBtn);
   }
 
   function closeArchive() {
-    elements.archiveModal.hidden = true;
+    hideModal(elements.archiveModal, elements.archiveOpenBtn);
     game.selectedArchiveIncidentTicketId = null;
-    elements.archiveOpenBtn.focus();
   }
 
   function handleArchiveFilter(event) {
@@ -1275,14 +1308,12 @@ TERMINAL
       ? "이 브라우저에 저장된 모든 완료 Shift 기록을 삭제합니다. 현재 Shift에는 영향을 주지 않습니다."
       : "선택한 완료 Shift Snapshot만 삭제합니다. 현재 Shift에는 영향을 주지 않습니다.";
     elements.archiveConfirmActionBtn.textContent = clear ? "전체 삭제 · CLEAR ALL" : "삭제 · DELETE";
-    elements.archiveConfirmModal.hidden = false;
-    elements.archiveConfirmCancelBtn.focus();
+    showModal(elements.archiveConfirmModal, elements.archiveConfirmCancelBtn);
   }
 
   function closeArchiveConfirmation() {
-    elements.archiveConfirmModal.hidden = true;
+    hideModal(elements.archiveConfirmModal, elements.archiveCloseBtn);
     game.archiveConfirmAction = null;
-    elements.archiveCloseBtn.focus();
   }
 
   function confirmArchiveAction() {
@@ -1291,7 +1322,7 @@ TERMINAL
     const result = pending.action === "clear"
       ? Storage.clearArchive()
       : Storage.deleteShiftRecord(pending.shiftId);
-    elements.archiveConfirmModal.hidden = true;
+    hideModal(elements.archiveConfirmModal);
     game.archiveConfirmAction = null;
     if (!result.ok) {
       setArchiveNotice(result.reason ?? "Archive 작업을 완료하지 못했습니다.", "warning");
@@ -1336,6 +1367,7 @@ TERMINAL
     elements.currentDifficulty.textContent = difficulty.label;
     elements.currentDifficulty.className = difficultyKey.toLowerCase();
     elements.difficultySummary.textContent = `SLA ×${difficulty.slaMultiplier.toFixed(2)} · SCORE ×${difficulty.scoreMultiplier.toFixed(2)} · INVESTIGATION ${difficulty.investigationRequired ? "REQUIRED" : "OPTIONAL"}`;
+    if (shift.status === "IDLE") elements.scoreTrend.textContent = Analytics.formatScoreMultiplier(difficulty.scoreMultiplier);
     elements.difficultySelector.querySelectorAll("[data-difficulty]").forEach((button) => {
       const selected = button.dataset.difficulty === difficultyKey;
       button.classList.toggle("selected", selected);
@@ -1377,9 +1409,15 @@ TERMINAL
     }
 
     const candidates = racks.filter((rack) => rack.status !== "critical" && !rack.ticket);
+    const rackWarning = Analytics.getFullRackWarningTransition({
+      warningActive: game.fullRackWarningActive,
+      hasAvailableRack: candidates.length > 0,
+      source
+    });
+    game.fullRackWarningActive = rackWarning.nextWarningActive;
     if (!candidates.length) {
       if (source === "manual") showToast("모든 Rack에 장애가 발생했습니다. 먼저 복구하세요.", "error");
-      addLog("WARNING", "추가 Incident 생성 실패 - 가용 Rack 없음");
+      if (rackWarning.shouldLog) addLog("WARNING", `추가 Incident 생성 실패 - 가용 Rack 없음 (${source === "manual" ? "MANUAL" : "AUTO"})`);
       return false;
     }
 
@@ -1504,7 +1542,7 @@ TERMINAL
     if (rack.ticket.stage !== "action") {
       if (!rack.ticket.prematureRecoveryPenalized) {
         rack.ticket.prematureRecoveryPenalized = true;
-        game.score -= 30;
+        changeScore(-30);
         elements.scoreTrend.textContent = "절차 위반 -30 PTS";
         addLog("WARNING", `${rack.ticket.ticketId} ${rackLabel(rack.id)} 미진단 복구 거부 / -30 PTS`);
         showToast("경고: 진단 없이 복구할 수 없습니다. -30점", "error");
@@ -1531,7 +1569,8 @@ TERMINAL
     rack.status = ticket.previousStatus ?? "healthy";
     rack.metrics = ticket.previousMetrics ? { ...ticket.previousMetrics } : createNormalMetrics();
     rack.ticket = null;
-    game.score += awardedScore;
+    game.fullRackWarningActive = false;
+    changeScore(awardedScore);
     game.availability = Math.min(100, game.availability + 0.85);
     recalculateTemperature();
     elements.scoreTrend.textContent = `복구 성공 +${awardedScore} PTS`;
@@ -1558,7 +1597,7 @@ TERMINAL
       attempted.push(option.optionId);
       recordTicketEvent(ticket, isDiagnosis ? "WRONG_DIAGNOSIS" : "WRONG_ACTION", option.label);
       const penalty = isDiagnosis ? 10 : 20;
-      game.score -= penalty;
+      changeScore(-penalty);
       if (ticket.countedInShift) {
         if (isDiagnosis) game.stats.wrongDiagnoses += 1;
         else game.stats.wrongActions += 1;
@@ -1593,7 +1632,7 @@ TERMINAL
     ticket.slaBreached = true;
     ticket.slaPenaltyApplied = true;
     recordTicketEvent(ticket, "SLA_BREACHED", `${ticket.appliedSlaSeconds}s applied SLA`);
-    game.score -= 50;
+    changeScore(-50);
     game.availability = Math.max(0, game.availability - 0.5);
     if (ticket.countedInShift) game.stats.slaBreaches += 1;
     elements.scoreTrend.textContent = "SLA 위반 -50 PTS";
@@ -1667,9 +1706,11 @@ TERMINAL
     game.selectedId = null;
     game.ticketSequence = 0;
     game.lastIncidentId = null;
+    game.fullRackWarningActive = false;
     game.incidentHistory = [];
     game.historyFilters = { category: "ALL", sla: "ALL" };
     game.selectedHistoryTicketId = null;
+    game.archiveConfirmAction = null;
     game.stats = createEmptyStats();
     if (resetDifficulty) game.selectedDifficulty = "NORMAL";
     game.shift.status = "IDLE";
@@ -1680,10 +1721,9 @@ TERMINAL
     game.shift.remainingSeconds = SHIFT_CONFIG.durationSeconds;
     game.shift.archived = false;
     elements.eventLog.innerHTML = "";
-    elements.scoreTrend.textContent = "복구 시 +100 PTS";
-    elements.endShiftConfirmModal.hidden = true;
-    elements.historyModal.hidden = true;
-    elements.reportModal.hidden = true;
+    elements.scoreTrend.textContent = Analytics.formatScoreMultiplier(getDifficultyConfig(game.selectedDifficulty).scoreMultiplier);
+    managedModals.forEach((modal) => { modal.hidden = true; });
+    syncModalState();
     refreshUI();
   }
 
@@ -1769,6 +1809,10 @@ TERMINAL
   }
 
   function showShiftReport(report = calculateShiftReport(), grade = calculateGrade(report)) {
+    hideModal(elements.historyModal);
+    hideModal(elements.archiveConfirmModal);
+    hideModal(elements.archiveModal);
+    game.archiveConfirmAction = null;
     elements.reportGrade.textContent = grade;
     elements.reportScore.textContent = `${report.score} PTS`;
     elements.reportGenerated.textContent = report.generated;
@@ -1805,7 +1849,7 @@ TERMINAL
       <div><strong>STRONG</strong>${summaryList(operator.strong, "No standout metric yet")}</div>
       <div><strong>NEEDS IMPROVEMENT</strong>${summaryList(operator.needsImprovement, "No metric below the current rule threshold")}</div>
       <small>${escapeHtml(operator.note)}</small>`;
-    elements.reportModal.hidden = false;
+    showModal(elements.reportModal, elements.newShiftBtn);
   }
 
   function archiveCompletedShift(report, grade, endReason) {
@@ -1843,7 +1887,7 @@ TERMINAL
     game.shift.endedAt = Date.now();
     game.shift.remainingSeconds = 0;
     clearShiftTimers();
-    elements.endShiftConfirmModal.hidden = true;
+    hideModal(elements.endShiftConfirmModal);
     game.stats.unresolvedIncidents = racks.filter((rack) => rack.ticket?.countedInShift).length;
     racks.forEach((rack) => {
       if (rack.ticket) rack.ticket.slaFrozenRemaining = getSlaRemaining(rack.ticket);
@@ -1859,18 +1903,16 @@ TERMINAL
 
   function openEndShiftConfirmation() {
     if (game.shift.status !== "RUNNING") return;
-    elements.endShiftConfirmModal.hidden = false;
-    elements.cancelEndShiftBtn.focus();
+    showModal(elements.endShiftConfirmModal, elements.cancelEndShiftBtn);
   }
 
   function closeEndShiftConfirmation() {
-    elements.endShiftConfirmModal.hidden = true;
-    if (game.shift.status === "RUNNING") elements.endShiftBtn.focus();
+    hideModal(elements.endShiftConfirmModal, game.shift.status === "RUNNING" ? elements.endShiftBtn : null);
   }
 
   function confirmManualEndShift() {
     if (game.shift.status !== "RUNNING") {
-      elements.endShiftConfirmModal.hidden = true;
+      hideModal(elements.endShiftConfirmModal);
       return;
     }
     endShift("manual");
@@ -1939,6 +1981,29 @@ TERMINAL
   }
 
   function handleModalKeydown(event) {
+    const activeModal = [
+      elements.archiveConfirmModal,
+      elements.endShiftConfirmModal,
+      elements.reportModal,
+      elements.historyModal,
+      elements.archiveModal
+    ].find((modal) => !modal.hidden);
+    if (!activeModal) return;
+    if (event.key === "Tab") {
+      const focusable = [...activeModal.querySelectorAll("button:not(:disabled), select:not(:disabled), input:not(:disabled), [tabindex]:not([tabindex='-1'])")]
+        .filter((item) => !item.hidden);
+      if (!focusable.length) return;
+      const first = focusable[0];
+      const last = focusable.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
+      return;
+    }
     if (event.key !== "Escape") return;
     if (!elements.archiveConfirmModal.hidden) {
       closeArchiveConfirmation();
@@ -1956,6 +2021,7 @@ TERMINAL
   }
 
   function initializeGame() {
+    elements.appVersion.textContent = APP_VERSION;
     elements.rackGrid.addEventListener("click", handleRackSelection);
     elements.incidentQueue.addEventListener("click", handleQueueSelection);
     elements.difficultySelector.addEventListener("click", handleDifficultySelection);

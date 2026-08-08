@@ -1,0 +1,10 @@
+{
+  "name": "dc-ops-night-shift",
+  "version": "0.10.0",
+  "private": true,
+  "description": "Browser-based data center incident response simulator",
+  "scripts": {
+    "check": "node --check app.js && node --check incidents.js && node --check analytics.js && node --check storage.js && node --check tests/run-tests.js",
+    "test": "node tests/run-tests.js"
+  }
+}

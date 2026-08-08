@@ -91,6 +91,31 @@ test("Hard Investigation Coverage includes unresolved tickets", () => {
 test("Optional tickets do not enter Hard Investigation Coverage", () => {
   assert.equal(Analytics.calculateInvestigationCoverage([{ difficulty: "NORMAL", investigationRequired: false }]).coverage, null);
 });
+test("Score display reports the exact Difficulty multiplier", () => {
+  assert.equal(Analytics.formatScoreMultiplier(0.85), "RECOVERY REWARD · DIFFICULTY ×0.85");
+  assert.equal(Analytics.formatScoreMultiplier(1), "RECOVERY REWARD · DIFFICULTY ×1.00");
+  assert.equal(Analytics.formatScoreMultiplier(1.25), "RECOVERY REWARD · DIFFICULTY ×1.25");
+});
+test("Score changes share a zero-point floor", () => {
+  assert.equal(Analytics.applyScoreDelta(10, -30), 0);
+  assert.equal(Analytics.applyScoreDelta(10, 25), 35);
+});
+test("Terminal utility commands are excluded from investigation counts", () => {
+  assert.equal(Analytics.classifyTerminalCommand("clear", "clear"), "UTILITY");
+  assert.equal(Analytics.classifyTerminalCommand("help", "help"), "UTILITY");
+  assert.equal(Analytics.classifyTerminalCommand("ping", "ping localhost"), "INVESTIGATION");
+  assert.equal(Analytics.classifyTerminalCommand(null, "rm -rf /"), "INVALID");
+});
+test("Automatic full-Rack warnings log once until capacity returns", () => {
+  const first = Analytics.getFullRackWarningTransition({ warningActive: false, hasAvailableRack: false, source: "auto" });
+  const repeated = Analytics.getFullRackWarningTransition({ warningActive: first.nextWarningActive, hasAvailableRack: false, source: "auto" });
+  const manual = Analytics.getFullRackWarningTransition({ warningActive: true, hasAvailableRack: false, source: "manual" });
+  const reset = Analytics.getFullRackWarningTransition({ warningActive: true, hasAvailableRack: true, source: "auto" });
+  assert.deepEqual(first, { shouldLog: true, nextWarningActive: true });
+  assert.deepEqual(repeated, { shouldLog: false, nextWarningActive: true });
+  assert.deepEqual(manual, { shouldLog: true, nextWarningActive: true });
+  assert.deepEqual(reset, { shouldLog: false, nextWarningActive: false });
+});
 test("RCA report is generated from ticket and play records", () => {
   const report = Analytics.buildIncidentReport({
     ticketId: "TKT-0001", incidentId: "INC-001", title: "Nginx Service Down", category: "SERVER", severity: "P2",
