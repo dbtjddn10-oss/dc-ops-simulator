@@ -11,7 +11,7 @@ v0.10은 대규모 기능 추가 대신 v0.9 기능을 안정화하고 공개 po
 
 - 기존 Known Issues 중 score, terminal 통계, full-rack 경고 문제 해결
 - UI/접근성/modal/mobile 기본 품질 개선
-- 영문 `README.md`와 실제 구조 기반 Mermaid diagram 추가
+- Portfolio용 한국어 중심 `README.md`와 실제 구조 기반 Mermaid diagram 정비
 - `.gitattributes`, `.gitignore`, dependency-free `package.json` 추가
 - GitHub Actions CI 추가
 - 자동 테스트와 브라우저 회귀 범위 확장
@@ -71,7 +71,7 @@ Incident마다 기본 score가 다르므로 하나의 예상 점수를 보여주
 
 ### README
 
-`README.md`는 영문을 중심으로 다음을 설명한다.
+`README.md`는 한국어 설명과 필요한 Technical Term을 함께 사용해 다음을 설명한다.
 
 - Overview와 제작 동기
 - Incident → Investigation → Evidence → Diagnosis → Recovery 흐름
@@ -157,7 +157,13 @@ Job은 Ubuntu와 Node.js 24 LTS를 사용하며 다음을 순서대로 실행한
 dc-ops-simulator/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml
+│       ├── ci.yml
+│       └── deploy.yml
+├── docs/
+│   └── DEPLOYMENT.md
+├── infra/
+│   ├── cloudformation.yml
+│   └── github-oidc.yml
 ├── tests/
 │   └── run-tests.js
 ├── .gitattributes
@@ -220,3 +226,16 @@ dc-ops-simulator/
 5. GitHub Actions에 배포를 추가할 경우 test 성공 이후에만 실행
 
 v0.10 검증에서 즉시 별도 hotfix가 필요한 치명적 문제는 발견되지 않았다. 정확한 375px hosted/device 확인에서 layout regression이 발견될 경우에만 `v0.10.1`을 먼저 권장한다.
+
+## 13. v1.0 Deployment Preparation
+
+다음 준비 파일을 추가했다. 이 상태는 **배포 완료 또는 v1.0 release를 의미하지 않는다.**
+
+- `infra/cloudformation.yml`: Private S3 REST origin, CloudFront, OAC, HTTPS redirect와 짧은 cache policy
+- `infra/github-oidc.yml`: `dbtjddn10-oss/dc-ops-simulator`의 `production` environment로 제한한 GitHub OIDC trust와 최소 권한 deploy Role
+- `.github/workflows/deploy.yml`: Node.js 24 syntax/test 성공 후에만 실행되는 수동 AWS deployment
+- `docs/DEPLOYMENT.md`: bootstrap, GitHub Variables, smoke test, rollback, cleanup, 비용과 security 절차
+
+Region, AWS identity, 기존 OIDC Provider와 CloudFormation `validate-template` 확인은 AWS CLI 설정 이후 진행한다. AWS CLI 설치와 인증, 사용할 Region과 Account 확인, Resource 생성 계획에 대한 사용자 승인이 다음 checkpoint다.
+
+실제 AWS Resource 생성과 공개 URL 검증 전까지 UI `APP_VERSION`, `package.json`, 현재 버전 표시는 v0.10으로 유지한다. 배포 후 Desktop/Mobile smoke test와 정확한 375px Device Emulation을 통과한 뒤 README Live Demo, Version History와 v1.0 status를 갱신한다.

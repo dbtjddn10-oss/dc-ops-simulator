@@ -93,7 +93,13 @@ flowchart TD
 dc-ops-simulator/
 ├── .github/
 │   └── workflows/
-│       └── ci.yml
+│       ├── ci.yml
+│       └── deploy.yml
+├── docs/
+│   └── DEPLOYMENT.md
+├── infra/
+│   ├── cloudformation.yml
+│   └── github-oidc.yml
 ├── tests/
 │   └── run-tests.js
 ├── .gitattributes
@@ -119,6 +125,10 @@ dc-ops-simulator/
 | `storage.js` | LocalStorage schema validation과 Shift Archive CRUD |
 | `tests/run-tests.js` | Node.js built-in module 기반 automated regression test |
 | `.github/workflows/ci.yml` | Push와 Pull Request에서 syntax check와 test 실행 |
+| `.github/workflows/deploy.yml` | test 통과 후 OIDC로 AWS에 수동 배포하는 Workflow |
+| `infra/cloudformation.yml` | Private S3, CloudFront와 OAC를 정의한 hosting template |
+| `infra/github-oidc.yml` | GitHub OIDC Provider와 최소 권한 deploy Role template |
+| `docs/DEPLOYMENT.md` | bootstrap, 배포, rollback, cleanup과 비용 안내 |
 | `PROJECT_STATUS.md` | 현재 Version, Known Issues와 검증 결과 기록 |
 
 ## Testing
@@ -134,6 +144,8 @@ npm run check
 - `npm run check`: `app.js`, `incidents.js`, `analytics.js`, `storage.js`, `tests/run-tests.js` syntax 검사
 
 GitHub Actions는 `main` push와 Pull Request에서 두 명령을 자동으로 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용하며, 외부 dependency 설치나 배포 단계는 포함하지 않습니다.
+
+별도의 AWS Deploy Workflow는 v1.0 준비 파일로 제공됩니다. `main`의 수동 실행만 허용하며, 같은 syntax check와 36개 test가 모두 성공한 뒤에만 OIDC 임시 credential로 정적 파일을 배포하도록 구성되어 있습니다. AWS Resource는 아직 생성되지 않았으며 자세한 bootstrap 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
 
 주요 테스트 범위:
 
@@ -206,12 +218,14 @@ ipmitool sensor
 
 ### v1.0 — AWS Deployment & Portfolio Release
 
-- AWS 기반 Static Hosting 구성
-- HTTPS, cache, error document와 rollback 절차 문서화
+- Private S3 + CloudFront + OAC 기반 Static Hosting 구성
+- HTTPS, cache, 기본 오류 응답과 rollback 절차 문서화
 - 공개 URL에서 Desktop/Mobile Smoke Test
 - 정확한 375px Device Emulation 재검증
 - README Screenshot과 간단한 Operator Walkthrough 추가
 - CI 성공 이후에만 배포하는 Workflow 검토
+
+현재 저장소에는 CloudFormation과 GitHub OIDC 배포 준비 파일만 추가되어 있습니다. 실제 AWS Resource 생성, 공개 URL 등록, v1.0 Version 표시는 별도 승인과 공개 환경 검증이 끝난 뒤 진행합니다.
 
 향후 실제 Ubuntu 또는 EC2 Lab을 진행하더라도 이 Browser Simulation과는 별도 환경과 문서로 구분할 예정입니다.
 

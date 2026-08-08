@@ -1,0 +1,91 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: Least-privilege GitHub Actions OIDC role for DC OPS static deployment
+
+Parameters:
+  ContentBucketName:
+    Type: String
+    Description: BucketName output from the DC OPS hosting stack
+  DistributionId:
+    Type: String
+    Description: DistributionId output from the DC OPS hosting stack
+  ExistingGitHubOidcProviderArn:
+    Type: String
+    Default: ""
+    Description: Existing token.actions.githubusercontent.com provider ARN; leave empty to create one
+    AllowedPattern: '^$|^arn:(aws|aws-us-gov|aws-cn):iam::[0-9]{12}:oidc-provider/token[.]actions[.]githubusercontent[.]com$'
+    ConstraintDescription: Leave empty or provide the exact GitHub Actions OIDC provider ARN.
+  GitHubOidcSubject:
+    Type: String
+    Default: repo:dbtjddn10-oss/dc-ops-simulator:environment:production
+    Description: Exact GitHub OIDC sub claim allowed to assume the role
+
+Conditions:
+  CreateGitHubOidcProvider: !Equals [!Ref ExistingGitHubOidcProviderArn, ""]
+
+Resources:
+  GitHubOidcProvider:
+    Type: AWS::IAM::OIDCProvider
+    Condition: CreateGitHubOidcProvider
+    Properties:
+      ClientIdList:
+        - sts.amazonaws.com
+      Url: https://token.actions.githubusercontent.com
+      Tags:
+        - Key: Project
+          Value: dc-ops-night-shift
+
+  GitHubDeployRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: GitHub OIDC role limited to DC OPS content deployment
+      MaxSessionDuration: 3600
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Federated: !If
+                - CreateGitHubOidcProvider
+                - !Ref GitHubOidcProvider
+                - !Ref ExistingGitHubOidcProviderArn
+            Action: sts:AssumeRoleWithWebIdentity
+            Condition:
+              StringEquals:
+                token.actions.githubusercontent.com:aud: sts.amazonaws.com
+                token.actions.githubusercontent.com:sub: !Ref GitHubOidcSubject
+      Policies:
+        - PolicyName: DcOpsStaticContentDeploy
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Sid: ListTargetBucket
+                Effect: Allow
+                Action:
+                  - s3:GetBucketLocation
+                  - s3:ListBucket
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ContentBucketName}"
+              - Sid: ManageTargetBucketObjects
+                Effect: Allow
+                Action:
+                  - s3:DeleteObject
+                  - s3:GetObject
+                  - s3:PutObject
+                Resource: !Sub "arn:${AWS::Partition}:s3:::${ContentBucketName}/*"
+              - Sid: InvalidateTargetDistribution
+                Effect: Allow
+                Action: cloudfront:CreateInvalidation
+                Resource: !Sub "arn:${AWS::Partition}:cloudfront::${AWS::AccountId}:distribution/${DistributionId}"
+      Tags:
+        - Key: Project
+          Value: dc-ops-night-shift
+
+Outputs:
+  DeployRoleArn:
+    Description: Configure this value as the AWS_DEPLOY_ROLE_ARN GitHub repository variable
+    Value: !GetAtt GitHubDeployRole.Arn
+  GitHubOidcProviderArn:
+    Description: GitHub OIDC provider used by the deploy role
+    Value: !If
+      - CreateGitHubOidcProvider
+      - !Ref GitHubOidcProvider
+      - !Ref ExistingGitHubOidcProviderArn

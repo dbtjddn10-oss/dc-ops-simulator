@@ -1,0 +1,113 @@
+name: Deploy to AWS
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: production-deployment
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Test and deploy static site
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION }}
+      AWS_DEPLOY_ROLE_ARN: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+      S3_BUCKET_NAME: ${{ vars.S3_BUCKET_NAME }}
+      CLOUDFRONT_DISTRIBUTION_ID: ${{ vars.CLOUDFRONT_DISTRIBUTION_ID }}
+      CLOUDFRONT_DOMAIN_NAME: ${{ vars.CLOUDFRONT_DOMAIN_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Node.js LTS
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          package-manager-cache: false
+
+      - name: Check JavaScript syntax
+        run: npm run check
+
+      - name: Run automated tests
+        run: npm test
+
+      - name: Validate deployment variables
+        shell: bash
+        run: |
+          required_variables=(
+            AWS_REGION
+            AWS_DEPLOY_ROLE_ARN
+            S3_BUCKET_NAME
+            CLOUDFRONT_DISTRIBUTION_ID
+            CLOUDFRONT_DOMAIN_NAME
+          )
+
+          for variable_name in "${required_variables[@]}"; do
+            if [[ -z "${!variable_name}" ]]; then
+              echo "Missing required GitHub variable: ${variable_name}" >&2
+              exit 1
+            fi
+          done
+
+      - name: Configure temporary AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_DEPLOY_ROLE_ARN }}
+          role-session-name: dc-ops-github-deploy
+          mask-aws-account-id: true
+          unset-current-credentials: true
+
+      - name: Prepare static site artifact
+        shell: bash
+        run: |
+          site_dir="${RUNNER_TEMP}/dc-ops-site"
+          mkdir -p "${site_dir}"
+          cp index.html styles.css app.js incidents.js analytics.js storage.js "${site_dir}/"
+
+      - name: Sync static assets to private S3 bucket
+        shell: bash
+        run: |
+          site_dir="${RUNNER_TEMP}/dc-ops-site"
+          aws s3 sync "${site_dir}" "s3://${S3_BUCKET_NAME}" \
+            --delete \
+            --exclude "index.html" \
+            --cache-control "public,max-age=300,must-revalidate"
+          aws s3 cp "${site_dir}/index.html" "s3://${S3_BUCKET_NAME}/index.html" \
+            --cache-control "no-cache,max-age=0,must-revalidate" \
+            --content-type "text/html; charset=utf-8"
+
+      - name: Invalidate CloudFront cache
+        id: invalidate
+        shell: bash
+        run: |
+          invalidation_id=$(aws cloudfront create-invalidation \
+            --distribution-id "${CLOUDFRONT_DISTRIBUTION_ID}" \
+            --paths "/*" \
+            --query "Invalidation.Id" \
+            --output text)
+          echo "CloudFront invalidation requested: ${invalidation_id}"
+
+      - name: Smoke test public endpoint
+        shell: bash
+        run: |
+          public_url="https://${CLOUDFRONT_DOMAIN_NAME}/"
+          for attempt in {1..5}; do
+            if curl --fail --silent --show-error --location "${public_url}" | grep --quiet "DC OPS: NIGHT SHIFT"; then
+              echo "Smoke test passed: ${public_url}"
+              exit 0
+            fi
+            sleep 5
+          done
+          echo "Smoke test failed after 5 attempts: ${public_url}" >&2
+          exit 1
