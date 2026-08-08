@@ -102,10 +102,20 @@ jobs:
         shell: bash
         run: |
           public_url="https://${CLOUDFRONT_DOMAIN_NAME}/"
+          response_file=$(mktemp)
+          trap 'rm -f "${response_file}"' EXIT
+
           for attempt in {1..5}; do
-            if curl --fail --silent --show-error --location "${public_url}" | grep --quiet "DC OPS: NIGHT SHIFT"; then
-              echo "Smoke test passed: ${public_url}"
-              exit 0
+            if curl --fail --silent --show-error --location \
+              --output "${response_file}" \
+              "${public_url}"; then
+              if grep --quiet "DC OPS: NIGHT SHIFT" "${response_file}"; then
+                echo "Smoke test passed: ${public_url}"
+                exit 0
+              fi
+              echo "Smoke test content marker missing (attempt ${attempt}/5)" >&2
+            else
+              echo "Smoke test HTTP request failed (attempt ${attempt}/5)" >&2
             fi
             sleep 5
           done

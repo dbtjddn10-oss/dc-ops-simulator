@@ -16,7 +16,7 @@ Parameters:
     ConstraintDescription: Leave empty or provide the exact GitHub Actions OIDC provider ARN.
   GitHubOidcSubject:
     Type: String
-    Default: repo:dbtjddn10-oss/dc-ops-simulator:environment:production
+    Default: repo:dbtjddn10-oss@302221967/dc-ops-simulator@1326726431:environment:production
     Description: Exact GitHub OIDC sub claim allowed to assume the role
 
 Conditions:
