@@ -6,6 +6,8 @@
 
 이 프로젝트는 교육 및 Portfolio 목적의 Simulation입니다. 실제 데이터센터 인프라나 Monitoring System에 연결되지 않으며, 실제 Linux Shell 명령을 실행하지 않습니다.
 
+**Live Demo:** [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
+
 ## 프로젝트 개요 (Overview)
 
 데이터센터 운영에서 사용하는 Incident Response 흐름을 짧고 반복 가능한 브라우저 경험으로 구성했습니다.
@@ -59,7 +61,7 @@ Hard Mode에서는 필요한 수의 유효한 Evidence를 확보해야 Diagnosis
 - GitHub Actions 기반 syntax check와 CI
 - Desktop과 mobile breakpoint를 고려한 Responsive 구조
 
-> 정확한 375px Device Emulation은 현재 v0.10에서 완료된 것으로 간주하지 않습니다. Responsive CSS 구조는 구현되어 있으며, v1.0 공개 배포 후 실제 hosted 환경에서 다시 검증할 예정입니다.
+Responsive 구조와 정확한 375×812 Device Emulation을 실제 CloudFront 환경에서 검증했습니다. Dashboard, Terminal, Incident History와 Shift Archive에서 수평 overflow나 console error가 발생하지 않았습니다.
 
 ## Incident Categories
 
@@ -85,7 +87,18 @@ flowchart TD
     Tests --> Storage
 ```
 
-현재 버전에는 Backend, Database Server, AWS Service 또는 실제 Shell 연결이 없습니다. 모든 게임 상태와 UI 제어는 브라우저 내부에서 처리되며, 완료된 Shift Record만 LocalStorage에 저장됩니다.
+배포 구조는 다음과 같습니다.
+
+```mermaid
+flowchart LR
+    Browser["Browser"] -->|HTTPS| CloudFront["Amazon CloudFront"]
+    CloudFront -->|"OAC + SigV4"| S3["Private Amazon S3 REST origin"]
+    Actions["GitHub Actions<br/>production environment"] -->|"OIDC temporary credentials"| Role["Least-privilege IAM Role"]
+    Role -->|"Sync six static files"| S3
+    Role -->|"Create invalidation"| CloudFront
+```
+
+Application에는 Backend, Database Server, AWS API 또는 실제 Shell 연결이 없습니다. AWS는 정적 파일을 전달하는 Hosting 계층으로만 사용합니다. 모든 게임 상태와 UI 제어는 브라우저 내부에서 처리되며, 완료된 Shift Record만 LocalStorage에 저장됩니다.
 
 ## Project Structure
 
@@ -143,9 +156,9 @@ npm run check
 - `npm test`: 36개 automated checks 실행
 - `npm run check`: `app.js`, `incidents.js`, `analytics.js`, `storage.js`, `tests/run-tests.js` syntax 검사
 
-GitHub Actions는 `main` push와 Pull Request에서 두 명령을 자동으로 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용하며, 외부 dependency 설치나 배포 단계는 포함하지 않습니다.
+GitHub Actions CI는 `main` push와 Pull Request에서 두 명령을 자동으로 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용하며 외부 dependency 설치가 필요하지 않습니다.
 
-별도의 AWS Deploy Workflow는 v1.0 준비 파일로 제공됩니다. `main`의 수동 실행만 허용하며, 같은 syntax check와 36개 test가 모두 성공한 뒤에만 OIDC 임시 credential로 정적 파일을 배포하도록 구성되어 있습니다. AWS Resource는 아직 생성되지 않았으며 자세한 bootstrap 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
+별도의 AWS Deploy Workflow는 `main`의 `workflow_dispatch` 실행만 허용합니다. 같은 syntax check와 36개 test가 모두 성공한 뒤 GitHub OIDC 임시 credential로 Private S3에 6개 정적 파일을 배포하고 CloudFront cache invalidation과 공개 endpoint Smoke Test를 수행합니다. 장기 AWS Access Key는 GitHub에 저장하지 않습니다. 자세한 구조와 운영 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
 
 주요 테스트 범위:
 
@@ -181,6 +194,9 @@ http://localhost:8000
 - Browser LocalStorage
 - Node.js built-in modules
 - GitHub Actions
+- AWS CloudFormation
+- Amazon S3, Amazon CloudFront, Origin Access Control
+- GitHub OIDC 기반 IAM Role
 
 ## Simulation Scope
 
@@ -212,22 +228,19 @@ ipmitool sensor
 - Archive pagination, 검색, 장기 trend chart가 없습니다.
 - Background Tab에서는 화면 갱신 timer가 일시 중지될 수 있습니다. 경과 시간 계산은 `Date.now()`를 기준으로 합니다.
 - Incident 간격, SLA, penalty와 grade는 추가 playtest를 통해 조정할 여지가 있습니다.
-- Responsive 구조는 구현되어 있지만 정확한 375px Device Emulation은 v1.0 공개 배포 후 다시 검증할 예정입니다.
+- Custom Domain과 ACM Certificate는 구성하지 않았으며 CloudFront 기본 domain을 사용합니다.
 
 ## Roadmap
 
 ### v1.0 — AWS Deployment & Portfolio Release
 
-- Private S3 + CloudFront + OAC 기반 Static Hosting 구성
-- HTTPS, cache, 기본 오류 응답과 rollback 절차 문서화
-- 공개 URL에서 Desktop/Mobile Smoke Test
-- 정확한 375px Device Emulation 재검증
-- README Screenshot과 간단한 Operator Walkthrough 추가
-- CI 성공 이후에만 배포하는 Workflow 검토
+- Private S3 + CloudFront + OAC 기반 Static Hosting 운영
+- GitHub OIDC와 최소 권한 Deploy Role 기반 수동 배포
+- HTTPS redirect, cache policy, rollback과 cleanup 절차 문서화
+- 공개 URL에서 Desktop workflow 및 375×812 Device Emulation 검증
+- GitHub Actions CI와 배포 Workflow 모니터링
 
-현재 저장소에는 CloudFormation과 GitHub OIDC 배포 준비 파일만 추가되어 있습니다. 실제 AWS Resource 생성, 공개 URL 등록, v1.0 Version 표시는 별도 승인과 공개 환경 검증이 끝난 뒤 진행합니다.
-
-향후 실제 Ubuntu 또는 EC2 Lab을 진행하더라도 이 Browser Simulation과는 별도 환경과 문서로 구분할 예정입니다.
+v1.0 이후에도 Simulation 범위를 유지하면서 playtest 기반 SLA/score tuning과 Archive 사용성을 개선할 예정입니다. 실제 Ubuntu 또는 EC2 Lab을 진행하더라도 이 Browser Simulation과는 별도 환경과 문서로 구분합니다.
 
 ## Version History
 
@@ -235,5 +248,6 @@ ipmitool sensor
 - `v0.8` — Incident History & RCA Analytics System
 - `v0.9` — Persistent Shift Archive & Operations Records
 - `v0.10` — Production Readiness & Portfolio Polish
+- `v1.0` — AWS Deployment & Portfolio Release
 
 상세 구현 상태와 Known Issues, 검증 결과는 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)에서 확인할 수 있습니다.

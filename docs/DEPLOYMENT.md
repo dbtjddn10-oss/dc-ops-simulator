@@ -1,6 +1,8 @@
 # AWS Deployment Guide
 
-이 문서는 **DC OPS: NIGHT SHIFT**의 v1.0 공개 배포를 준비하기 위한 절차다. 현재 애플리케이션은 Backend가 없는 Static Frontend이며, AWS Resource를 실제 생성하기 전에는 배포 완료 상태로 간주하지 않는다.
+이 문서는 **DC OPS: NIGHT SHIFT** v1.0의 AWS 배포 구조와 재현 가능한 운영 절차를 설명한다. 애플리케이션은 Backend가 없는 Static Frontend다.
+
+현재 Production 배포는 Seoul Region(`ap-northeast-2`)의 Private S3와 CloudFront OAC 구조로 운영된다. Application Stack은 `dc-ops-night-shift-prod`, OIDC Stack은 `dc-ops-github-oidc`다. Account ID, Role ARN, Bucket 이름과 Distribution ID는 source에 기록하지 않고 CloudFormation Output과 GitHub `production` Environment variable로 전달한다.
 
 ## Architecture
 
@@ -76,7 +78,7 @@ $DcOpsBucketName = "replace-with-a-globally-unique-bucket-name"
 
 aws cloudformation deploy `
   --template-file infra/cloudformation.yml `
-  --stack-name dc-ops-production `
+  --stack-name dc-ops-night-shift-prod `
   --parameter-overrides DcOpsBucketName=$DcOpsBucketName `
   --region $DcOpsRegion `
   --no-fail-on-empty-changeset
@@ -86,7 +88,7 @@ aws cloudformation deploy `
 
 ```powershell
 aws cloudformation describe-stacks `
-  --stack-name dc-ops-production `
+  --stack-name dc-ops-night-shift-prod `
   --region $DcOpsRegion `
   --query "Stacks[0].Outputs"
 ```
@@ -124,7 +126,7 @@ aws cloudformation deploy `
     ContentBucketName=$DcOpsBucketName `
     DistributionId=$DcOpsDistributionId `
     ExistingGitHubOidcProviderArn=$ExistingGitHubProviderArn `
-    GitHubOidcSubject=repo:dbtjddn10-oss/dc-ops-simulator:environment:production `
+    GitHubOidcSubject=repo:dbtjddn10-oss@302221967/dc-ops-simulator@1326726431:environment:production `
   --capabilities CAPABILITY_IAM `
   --region $DcOpsRegion `
   --no-fail-on-empty-changeset
@@ -139,21 +141,21 @@ aws cloudformation deploy `
   --parameter-overrides `
     ContentBucketName=$DcOpsBucketName `
     DistributionId=$DcOpsDistributionId `
-    GitHubOidcSubject=repo:dbtjddn10-oss/dc-ops-simulator:environment:production `
+    GitHubOidcSubject=repo:dbtjddn10-oss@302221967/dc-ops-simulator@1326726431:environment:production `
   --capabilities CAPABILITY_IAM `
   --region $DcOpsRegion `
   --no-fail-on-empty-changeset
 ```
 
-Trust Policy는 `dbtjddn10-oss/dc-ops-simulator` 저장소의 `production` environment에만 `sts:AssumeRoleWithWebIdentity`를 허용한다. GitHub Environment의 deployment branch rule은 `main`으로 제한하고, Workflow도 `main`이 아니면 job을 실행하지 않는다. IAM permission은 대상 Bucket의 list/get/put/delete와 대상 Distribution의 `CreateInvalidation`으로 제한한다.
+Trust Policy는 immutable owner/repository ID와 `production` environment가 모두 일치할 때만 `sts:AssumeRoleWithWebIdentity`를 허용한다. Condition은 wildcard 없는 exact `StringEquals`다. GitHub Environment의 deployment branch rule은 `main`으로 제한하고, Workflow도 `main`이 아니면 job을 실행하지 않는다. IAM permission은 대상 Bucket의 list/get/put/delete와 대상 Distribution의 `CreateInvalidation`으로 제한한다.
 
-GitHub가 해당 Repository에 immutable OIDC subject claim을 적용한 경우에는 Repository의 실제 `sub` 형식에 맞춰 `GitHubOidcSubject`를 owner/repository ID 기반 값으로 바꾼다. wildcard subject는 사용하지 않는다.
+이 Repository는 2026-07-15 이후 생성되어 GitHub의 immutable OIDC subject 형식을 사용한다. Repository를 복제해 별도 배포할 때는 GitHub API에서 실제 owner/repository ID 기반 `sub`를 확인한 뒤 exact value로 교체하며 wildcard subject는 사용하지 않는다.
 
 ## GitHub Actions 설정
 
-GitHub Repository의 `Settings → Environments`에서 `production` environment를 만들고 deployment branch를 `main`으로 제한한다. 필요하면 required reviewer를 지정해 수동 승인 단계를 추가한다.
+GitHub Repository의 `Settings → Environments`에서 `production` environment를 만들고 deployment branch를 `main`으로 제한한다. 현재 이 Environment와 `main` branch rule이 구성되어 있다. 필요하면 required reviewer를 지정해 수동 승인 단계를 추가한다.
 
-`Settings → Secrets and variables → Actions → Variables`에 다음 Repository Variables를 등록한다.
+`Settings → Environments → production → Environment variables`에 다음 변수를 등록한다.
 
 | Variable | 값 |
 | --- | --- |
@@ -257,7 +259,7 @@ Cleanup은 배포 검증과 별개의 파괴적 작업이므로 별도 승인을
 ```powershell
 aws s3 rm "s3://bucket-name" --recursive
 aws cloudformation delete-stack --stack-name dc-ops-github-oidc --region $DcOpsRegion
-aws cloudformation delete-stack --stack-name dc-ops-production --region $DcOpsRegion
+aws cloudformation delete-stack --stack-name dc-ops-night-shift-prod --region $DcOpsRegion
 ```
 
 위 command는 실제 데이터를 삭제하므로 이 문서 작성 단계에서는 실행하지 않는다.

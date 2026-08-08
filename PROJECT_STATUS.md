@@ -1,241 +1,201 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
-최종 업데이트: 2026-08-08  
-현재 버전: **v0.10 — Production Readiness & Portfolio Polish**
+최종 업데이트: 2026-08-09
+현재 버전: **v1.0 — AWS Deployment & Portfolio Release**
 
-외부 런타임 라이브러리나 빌드 과정 없이 브라우저에서 실행되는 데이터센터 Incident 대응 학습용 시뮬레이터다. 실제 Linux shell, 운영 인프라, backend, database 또는 AWS API와 연결되지 않는다.
+외부 runtime library나 build 과정 없이 브라우저에서 실행되는 데이터센터 Incident 대응 학습용 Simulator다. 실제 Linux Shell, 운영 Monitoring System, backend, database 또는 AWS API와 연결되지 않는다. AWS는 정적 Frontend를 전달하는 Hosting 계층으로만 사용한다.
 
-## 1. v0.10 목표와 범위
+## 1. v1.0 목표와 결과
 
-v0.10은 대규모 기능 추가 대신 v0.9 기능을 안정화하고 공개 portfolio repository로서의 완성도를 높이는 버전이다.
+v1.0에서는 v0.10의 기능 범위를 유지하면서 실제 공개 Hosting과 배포 자동화, 보안 검증을 완료했다.
 
-- 기존 Known Issues 중 score, terminal 통계, full-rack 경고 문제 해결
-- UI/접근성/modal/mobile 기본 품질 개선
-- Portfolio용 한국어 중심 `README.md`와 실제 구조 기반 Mermaid diagram 정비
-- `.gitattributes`, `.gitignore`, dependency-free `package.json` 추가
-- GitHub Actions CI 추가
-- 자동 테스트와 브라우저 회귀 범위 확장
-- v1.0 AWS static deployment 준비
+- Seoul Region(`ap-northeast-2`)에 Private S3 + CloudFront + OAC 구성
+- CloudFormation으로 Application Stack과 GitHub OIDC Stack 관리
+- GitHub `production` Environment와 `main` branch rule 적용
+- immutable exact OIDC subject와 `StringEquals` Trust Policy 적용
+- 최소 권한 Deploy Role을 통한 `workflow_dispatch` 배포
+- Node.js 24 syntax check와 36 automated checks 통과 후에만 배포
+- CloudFront cache invalidation과 공개 endpoint Smoke Test 자동화
+- Desktop Incident Response workflow와 375×812 hosted layout 검증
+- README Live Demo와 실제 배포 Architecture 반영
 
-## 2. 해결된 Known Issues
+Live Demo: [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
 
-### Score 안내와 실제 계산 일치
+## 2. Application 기능 상태
 
-고정 문구 `복구 시 +100 PTS`를 제거했다. Idle 상태의 Score card는 선택한 Difficulty의 실제 multiplier를 표시한다.
+구현 완료:
 
-```text
-EASY   RECOVERY REWARD · DIFFICULTY ×0.85
-NORMAL RECOVERY REWARD · DIFFICULTY ×1.00
-HARD   RECOVERY REWARD · DIFFICULTY ×1.25
+- 검증된 Incident Scenario 15종
+- `SERVER`, `STORAGE`, `NETWORK`, `POWER`, `COOLING` 5개 Category
+- Easy / Normal / Hard Difficulty
+- Incident Queue, Ticket별 SLA Timer와 SLA breach
+- Allowlist 기반 Safe Simulated Terminal과 Evidence 수집
+- Hard Mode Investigation Evidence Gate
+- Diagnosis, Root Cause, Recovery Action과 Score 처리
+- Incident History, Timeline, RCA, Lessons Learned
+- SLA Compliance, MTTR, Accuracy, Category Performance
+- LocalStorage 기반 Shift Archive, Filter, Previous Shift Comparison, Personal Best
+- Archive 개별 삭제, 전체 삭제와 최대 50개 제한
+- Modal focus, Escape, scroll lock과 Responsive layout
+
+## 3. AWS Architecture
+
+```mermaid
+flowchart LR
+    Browser["Browser"] -->|HTTPS| CloudFront["Amazon CloudFront"]
+    CloudFront -->|"OAC + SigV4"| S3["Private S3 REST origin"]
+    Actions["GitHub Actions<br/>production environment"] -->|"OIDC temporary credentials"| Role["Least-privilege Deploy Role"]
+    Role -->|"Sync six static files"| S3
+    Role -->|"Create invalidation"| CloudFront
 ```
 
-Incident마다 기본 score가 다르므로 하나의 예상 점수를 보여주지 않고 multiplier 자체를 정확히 안내한다.
+Application Stack `dc-ops-night-shift-prod`:
 
-### Negative Score 방지
+- Private S3 Bucket
+- S3 Bucket Policy
+- CloudFront Distribution
+- CloudFront Origin Access Control
+- CloudFront Cache Policy
 
-모든 런타임 score 증감은 `Analytics.applyScoreDelta()`를 거치며 최저 0점을 적용한다. 미진단 복구, 오진, 잘못된 Action, SLA breach가 연속되어도 score가 음수가 되지 않는다.
+OIDC Stack `dc-ops-github-oidc`:
 
-### Terminal utility 통계 분리
+- GitHub Actions OIDC Provider
+- 최소 권한 IAM Deploy Role과 inline policy
 
-`clear`와 `help`는 `UTILITY`, 허용된 조사 명령은 `INVESTIGATION`, 잘못된 명령은 `INVALID`로 분류한다. Utility 명령은 `commandsExecuted`에 포함하지 않는다. 잘못된 명령은 실행 시도와 invalid 통계에 포함한다.
+Account ID, Role ARN, Bucket 이름과 Distribution ID는 repository에 기록하지 않는다.
 
-### Full-Rack 자동 경고 dedupe
+## 4. AWS Security 검증
 
-모든 Rack에 Incident가 있을 때 자동 scheduler는 해당 full 상태에서 경고를 한 번만 기록한다. 수동 생성 실패는 매번 사용자에게 안내한다. Rack 하나가 복구되어 capacity가 생기면 dedupe 상태를 reset하므로 다음 full 상태에서는 다시 한 번 경고한다.
+- S3 Block Public Access 4개 설정 모두 활성화
+- Object Ownership `BucketOwnerEnforced`
+- S3 Website Hosting 비활성화
+- S3 object 직접 요청 403 확인
+- Bucket Policy에 public principal 없음
+- CloudFront service principal만 대상 Distribution 조건으로 `s3:GetObject` 허용
+- CloudFront S3 REST origin과 OAC 연결
+- OAC `SigningBehavior: always`, `SigningProtocol: sigv4`
+- Viewer Protocol Policy `redirect-to-https`
+- CloudFront 허용 method `GET`, `HEAD`
+- GitHub OIDC audience `sts.amazonaws.com`
+- Trust Policy는 immutable exact subject에 `StringEquals` 사용
+- subject wildcard 없음
+- Deploy Role managed policy 0개, AdministratorAccess 없음
+- 권한은 대상 Bucket의 list/get/put/delete와 대상 Distribution의 invalidation으로 제한
+- GitHub에 장기 AWS Access Key, Secret Access Key 또는 Session Token 저장 안 함
 
-### Target-bearing Terminal 출력
+## 5. GitHub Actions
 
-`ping`, `curl`, `nslookup`, `traceroute`에 explicit target이 있으면 기본 safe simulation output이 입력 target을 일관되게 표시한다. 실제 DNS/network stack을 구현한 것은 아니다.
+### CI
 
-### Modal 기본 관리
+`.github/workflows/ci.yml`은 `main` push와 Pull Request에서 실행된다.
 
-- Incident History와 Shift Archive를 동시에 열지 않음
-- confirmation modal을 최우선 Escape 대상으로 처리
-- 열린 modal 내부에서 Tab focus 순환
-- modal이 열리면 body scroll 잠금
-- 닫은 뒤 관련 trigger button으로 focus 복귀
-- Shift Report가 열릴 때 다른 overlay 정리
+1. Node.js 24 설정
+2. JavaScript syntax check
+3. 36 automated checks
 
-## 3. UI와 접근성
+### Deploy
 
-- title과 meta description을 simulator 범위에 맞게 정리
-- header에 `v0.10` build badge 표시; UI version은 `APP_VERSION`에서 설정
-- 상태 범례는 색상과 한국어/영문 text를 함께 사용
-- native `button`, 연결된 form label, dialog role, `aria-modal`, labelled/described dialog 유지
-- 전체 interactive element에 명확한 `:focus-visible` outline 추가
-- hover/disabled 상태와 modal/Archive card 간격 일관성 검토
-- footer에 local simulation과 live-system 미접속 범위 표시
-- 430px 이하 topbar/version/footer 보정과 기존 375px 단일-column layout 유지
+`.github/workflows/deploy.yml`은 `workflow_dispatch`만 지원하며 `main`이 아니면 deploy job을 실행하지 않는다.
 
-## 4. Repository 문서와 정책
+1. JavaScript syntax check
+2. 36 automated checks
+3. GitHub Environment variable 검증
+4. GitHub OIDC token으로 `AssumeRoleWithWebIdentity`
+5. 임시 AWS credential 발급
+6. Private S3에 6개 정적 파일 sync
+7. CloudFront `/*` invalidation
+8. HTTPS endpoint와 `DC OPS: NIGHT SHIFT` marker Smoke Test
 
-### README
+Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marker를 별도로 검사한다. `pipefail` 환경에서 `curl | grep --quiet`가 발생시키던 curl exit code 23 false negative를 제거했다.
 
-`README.md`는 한국어 설명과 필요한 Technical Term을 함께 사용해 다음을 설명한다.
+## 6. Automated Tests
 
-- Overview와 제작 동기
-- Incident → Investigation → Evidence → Diagnosis → Recovery 흐름
-- 15 Incident와 5 Category
-- 실제 코드 구조 기반 Mermaid architecture
-- Project structure, testing, local run
-- safe simulated terminal 범위
-- limitations, roadmap, version milestones
+`tests/run-tests.js`는 Node.js built-in module만 사용하며 **36개 check**를 포함한다.
 
-구현되지 않은 backend, AWS service, database 또는 live shell을 구현된 것처럼 표현하지 않는다.
-
-### Line ending
-
-`.gitattributes`는 JavaScript, HTML, CSS, Markdown, JSON, YAML을 repository에서 LF로 저장하도록 지정한다. 기존 전체 파일에 `git add --renormalize`를 수행하지 않아 line-ending-only 대규모 diff를 만들지 않는다.
-
-### Ignore와 package metadata
-
-`.gitignore`는 `node_modules/`, `.env`, `.env.*`, macOS/Windows metadata와 npm debug log를 제외한다. `package.json`에는 dependency 없이 `npm test`와 `npm run check` script만 있다.
-
-## 5. GitHub Actions CI
-
-`.github/workflows/ci.yml`은 다음 event에서 실행된다.
-
-- `main` push
-- pull request
-
-Job은 Ubuntu와 Node.js 24 LTS를 사용하며 다음을 순서대로 실행한다. GitHub-hosted runner의 Node 20 action runtime deprecation warning을 피하기 위해 공식 문서의 현재 major인 `actions/checkout@v7`과 `actions/setup-node@v7`을 사용한다.
-
-1. repository checkout
-2. JavaScript syntax checks
-3. dependency-free automated tests
-
-배포 단계는 포함하지 않는다.
-
-## 6. 자동 테스트
-
-`tests/run-tests.js`는 Node built-in module만 사용하며 **36개 check**를 포함한다.
-
-- Incident Catalog validation, unique ID, Category count
-- Difficulty pool 7 / 12 / 15
-- MTTR format, History sort/filter
-- Category Analytics, Hard Investigation Coverage
-- Score multiplier display consistency
-- Score minimum 0
+- Incident Catalog validation과 Category/Difficulty pool
+- MTTR, History filter와 Category Analytics
+- Score multiplier와 최저 0점 정책
 - Terminal utility/investigation/invalid 분류
-- Full-Rack auto warning dedupe와 capacity reset
+- Full-Rack warning deduplication
 - RCA와 Operator Summary
-- Archive empty/save/load/schema/corruption/future-schema 처리
-- compact snapshot과 terminal output size limit
-- Shift ID, duplicate 제거, 최대 50개 제한
-- Delete/Clear, filter/sort
-- Previous Shift Comparison과 MTTR 방향
-- Personal Best
-- Current Shift reset과 Archive 분리
+- Archive schema/corruption/future-schema 처리
+- Shift Snapshot, ID, CRUD, filter/sort와 최대 50개 제한
+- Previous Shift Comparison과 Personal Best
 
-검증 결과: **36 passed, 0 failed**
+최종 로컬 결과: **36 passed, 0 failed**
 
-## 7. Browser Regression
+## 7. Public Endpoint 검증
 
 확인 완료:
 
-- v0.10 표시와 EASY/NORMAL/HARD multiplier
-- START SHIFT, manual/automatic Incident
-- full-rack auto warning 1회 및 Rack 복구 후 reset
-- explicit terminal target, typed `clear`, score floor 0
-- Diagnosis, Action, Recovery
-- Hard Investigation Gate 0/2 → 2/2 unlock
-- SLA breach와 Queue
-- Incident History, Timeline, RCA
-- automatic timer end와 manual confirmation end
-- Report에서 `clear` 제외 command count
-- NEW SHIFT 후 Archive 유지
-- Archive Difficulty filter, Shift comparison, Personal Best
-- Archive Incident RCA, 단일 Delete, Clear All, empty state
-- modal Escape, focus 복귀, body scroll lock
-- browser console error 0
+- CloudFront HTTPS root 200
+- HTTP 요청의 HTTPS 301 redirect
+- `index.html`, `styles.css`, `app.js`, `incidents.js`, `analytics.js`, `storage.js` 각각 200
+- HTML에서 `DC OPS: NIGHT SHIFT` marker 확인
+- S3 REST URL 직접 접근 403
+- Browser console error 0
 
-현재 in-app browser는 1280px에서 실제 렌더링과 visual check를 완료했다. 정확한 375px iframe viewport 생성은 browser URL 보안 정책이 차단하여 이번 run에서는 재현하지 못했다. 기존 375px 회귀 결과와 CSS breakpoint를 유지했고 변경된 mobile rule은 정적 검토했다. v1.0 공개 배포 전 실제 375px device emulation을 한 번 더 수행하는 것을 권장한다.
+## 8. Browser Smoke Test
 
-## 8. 현재 파일 구조
+실제 CloudFront URL에서 다음 workflow를 확인했다.
 
-```text
-dc-ops-simulator/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
-├── docs/
-│   └── DEPLOYMENT.md
-├── infra/
-│   ├── cloudformation.yml
-│   └── github-oidc.yml
-├── tests/
-│   └── run-tests.js
-├── .gitattributes
-├── .gitignore
-├── analytics.js
-├── app.js
-├── incidents.js
-├── index.html
-├── package.json
-├── PROJECT_STATUS.md
-├── README.md
-├── storage.js
-└── styles.css
-```
+- START SHIFT와 수동/자동 Incident 생성
+- Rack과 Incident Queue 선택
+- Safe Simulated Terminal에서 `nslookup` 실행
+- Evidence captured 표시
+- 올바른 Diagnosis와 Root Cause 공개
+- 올바른 Recovery Action과 Score 반영
+- Incident History의 Timeline, RCA와 Terminal Evidence
+- END SHIFT confirmation과 Shift Report
+- Shift Archive 저장
+- 새로고침 후 Archive count와 저장 record 유지
 
-## 9. 유지되는 Known Issues / Limitations
+브라우저 storage 자체를 직접 조회하지 않고 UI에서 저장 전후와 새로고침 후 record를 확인했다.
 
-- RUNNING Shift는 새로고침 후 복구되지 않는다.
-- Archive는 현재 browser profile/origin의 LocalStorage 범위이며 기기 간 공유되지 않는다.
-- schema v1 validation은 있지만 실제 migration runner는 없다.
-- Archive import/export와 cloud sync가 없다.
-- Terminal은 allowlist 기반 simulation이며 실제 shell, 권한, pipe, redirect, option 전체를 구현하지 않는다.
-- DNS/network/process/hardware output은 교육용 simulation이다.
-- background tab에서는 render timer가 일시 중지될 수 있다. elapsed time 계산은 `Date.now()` 기준이다.
-- Archive pagination, 검색, 장기 trend chart가 없다.
-- Incident 간격, SLA, penalty, grade는 더 넓은 playtest를 통한 tuning 여지가 있다.
+## 9. 375px Hosted 검증
 
-## 10. Error Handling과 Data Safety
+실제 CloudFront 환경에서 375×812 viewport로 확인했다.
 
-- LocalStorage unavailable, corrupted JSON, unsupported schema, corrupted record를 안전한 fallback으로 처리
-- Archive 저장 실패가 Shift Report와 현재 게임을 중단하지 않음
-- no available Rack, invalid terminal command, no selected Rack/Incident, empty History/Archive에 명시적 UI 제공
-- API key, password, token, AWS/GitHub credential 없음
-- repository 문서와 코드에 특정 사용자 PC의 절대 경로 없음
-- `.env*`는 Git ignore 대상
+- Dashboard와 Shift controls
+- Rack/Incident/Terminal 하단 영역
+- Incident History modal
+- Shift Archive modal과 상세 record
+- 수평 overflow 없음
+- viewport 밖으로 벗어난 visible element 없음
+- 의도하지 않은 text clipping 없음
+- console error 0
 
-## 11. Portfolio Readiness Review
+## 10. Known Issues / Limitations
 
-| 항목 | 판단 | 이유 |
-| --- | --- | --- |
-| README clarity | READY | 목적, 범위, workflow, 실행법, 한계를 명시 |
-| Code organization | NEEDS MINOR POLISH | 역할 분리는 명확하지만 `app.js`가 계속 큰 편 |
-| Testability | READY | 핵심 규칙을 pure helper와 36개 regression check로 보호 |
-| Git history continuity | READY | v0.7 → v0.8 → v0.9 → v0.10 milestone이 연속적 |
-| Data-center relevance | READY | Incident, evidence, SLA, MTTR, RCA, category 흐름이 명확 |
-| Simulation realism | NEEDS MINOR POLISH | 교육 목적에는 충분하지만 live shell/network는 아님 |
-| UI completeness | READY | core workflow, report, history, archive, empty/error 상태 포함 |
-| Deployment readiness | NEEDS MINOR POLISH | static build는 준비됐고 AWS 배포/공개 device 검증은 v1.0 범위 |
+- 실행 중인 Shift는 페이지 새로고침 후 복구되지 않는다.
+- Archive는 현재 Browser Profile과 Origin의 LocalStorage 범위이며 기기 간 동기화되지 않는다.
+- Storage schema v1 validation은 있지만 migration runner는 없다.
+- Archive import/export, cloud sync, pagination, 검색과 장기 trend chart가 없다.
+- Terminal은 allowlist 기반 Simulation이며 실제 Shell, permission, pipe, redirect와 전체 option을 구현하지 않는다.
+- DNS/network/process/hardware output은 교육용 Simulation이다.
+- Background Tab에서는 render timer가 일시 중지될 수 있다. elapsed time 계산은 `Date.now()` 기준이다.
+- Incident 간격, SLA, penalty와 grade는 추가 playtest를 통한 tuning 여지가 있다.
+- Custom Domain, Route 53, ACM Certificate, WAF는 구성하지 않았다.
+- CloudFront와 S3 요청, 저장 용량, data transfer와 invalidation 사용량에 따라 AWS 비용이 발생할 수 있다.
 
-종합 판단: **NEEDS MINOR POLISH**. 기능과 repository는 portfolio 공개 직전 단계이며, v1.0에서 실제 hosted URL, 375px device emulation, 배포 문서와 release screenshots를 완료하면 된다.
+## 11. Data Safety
 
-## 12. 다음 추천 버전
+- LocalStorage unavailable, corrupted JSON, unsupported schema와 손상 record를 안전한 fallback으로 처리
+- Archive 저장 실패가 Shift Report나 현재 게임을 중단하지 않음
+- API key, password, credential, Account ID와 개인 PC 절대경로를 source에 저장하지 않음
+- `.env*`, `node_modules/`와 OS metadata를 Git에서 제외
 
-### v1.0 — AWS Deployment & Portfolio Release
+## 12. Version History
 
-1. AWS static hosting 구조 선택과 최소 권한 배포
-2. HTTPS, caching, error document, rollback 절차 문서화
-3. 공개 URL에서 desktop/mobile smoke test
-4. README screenshot과 짧은 operator walkthrough 추가
-5. GitHub Actions에 배포를 추가할 경우 test 성공 이후에만 실행
+- `v0.7` — Expanded Incident Catalog & Category System
+- `v0.8` — Incident History & RCA Analytics System
+- `v0.9` — Persistent Shift Archive & Operations Records
+- `v0.10` — Production Readiness & Portfolio Polish
+- `v1.0` — AWS Deployment & Portfolio Release
 
-v0.10 검증에서 즉시 별도 hotfix가 필요한 치명적 문제는 발견되지 않았다. 정확한 375px hosted/device 확인에서 layout regression이 발견될 경우에만 `v0.10.1`을 먼저 권장한다.
+## 13. 다음 개선 후보
 
-## 13. v1.0 Deployment Preparation
-
-다음 준비 파일을 추가했다. 이 상태는 **배포 완료 또는 v1.0 release를 의미하지 않는다.**
-
-- `infra/cloudformation.yml`: Private S3 REST origin, CloudFront, OAC, HTTPS redirect와 짧은 cache policy
-- `infra/github-oidc.yml`: `dbtjddn10-oss/dc-ops-simulator`의 `production` environment로 제한한 GitHub OIDC trust와 최소 권한 deploy Role
-- `.github/workflows/deploy.yml`: Node.js 24 syntax/test 성공 후에만 실행되는 수동 AWS deployment
-- `docs/DEPLOYMENT.md`: bootstrap, GitHub Variables, smoke test, rollback, cleanup, 비용과 security 절차
-
-Region, AWS identity, 기존 OIDC Provider와 CloudFormation `validate-template` 확인은 AWS CLI 설정 이후 진행한다. AWS CLI 설치와 인증, 사용할 Region과 Account 확인, Resource 생성 계획에 대한 사용자 승인이 다음 checkpoint다.
-
-실제 AWS Resource 생성과 공개 URL 검증 전까지 UI `APP_VERSION`, `package.json`, 현재 버전 표시는 v0.10으로 유지한다. 배포 후 Desktop/Mobile smoke test와 정확한 375px Device Emulation을 통과한 뒤 README Live Demo, Version History와 v1.0 status를 갱신한다.
+- playtest 기반 SLA, Incident interval, score와 grade tuning
+- Archive 검색, pagination과 import/export
+- README Operator Walkthrough와 release screenshot 보강
+- Custom Domain은 비용과 운영 범위를 별도로 검토한 뒤 진행

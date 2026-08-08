@@ -1,8 +1,8 @@
 (function startDcOpsGame() {
   "use strict";
 
-  // ---------------- v0.10 설정 ----------------
-  const APP_VERSION = "v0.10";
+  // ---------------- v1.0 설정 ----------------
+  const APP_VERSION = "v1.0";
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
