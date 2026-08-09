@@ -13,8 +13,10 @@ Terminal에서 시스템이 정상 상태로 돌아왔는지 **Verification**까
 **Live Demo — v1.0 Stable**
 https://d35scspd118fhn.cloudfront.net
 
-**Current Development — v1.1 Floor Mode Preview**
-Branch: `feature/v1.1-floor-mode`
+**Live Preview — v1.1 Floor Mode**
+https://dbtjddn10-oss.github.io/dc-ops-simulator/
+
+Development Branch: `feature/v1.1-floor-mode`
 
 ---
 
