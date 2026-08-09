@@ -194,6 +194,14 @@
                 </div>
               </div>
               <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
+              <section class="terminal-workflow" id="floorTerminalWorkflow" aria-live="polite" hidden>
+                <div>
+                  <small id="floorTerminalWorkflowStep">INCIDENT RESPONSE</small>
+                  <strong id="floorTerminalWorkflowStatus">EVIDENCE 0 / 0</strong>
+                  <p id="floorTerminalWorkflowGuide">Terminal command로 Evidence를 수집하세요.</p>
+                </div>
+                <button id="floorTerminalWorkflowBtn" type="button">진단하기</button>
+              </section>
               <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
               <form class="terminal-command" id="terminalForm" autocomplete="off">
                 <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
@@ -243,6 +251,28 @@
                   <p id="floorIncidentHint">—</p>
                 </section>
               </div>
+            </div>
+          </section>
+
+          <section class="scene-popup scene-popup--workflow" id="floorWorkflowPopup" role="dialog" aria-modal="true" aria-labelledby="floorWorkflowTitle" hidden>
+            <div class="scene-popup__backdrop" data-scene-popup-close aria-hidden="true"></div>
+            <div class="scene-popup__panel floor-workflow-panel">
+              <header class="scene-popup__heading">
+                <div><p class="eyebrow" id="floorWorkflowEyebrow">INCIDENT RESPONSE</p><h3 id="floorWorkflowTitle">ROOT CAUSE DIAGNOSIS</h3></div>
+                <button class="scene-popup__close" id="floorWorkflowCloseBtn" type="button" aria-label="Close incident response popup">×</button>
+              </header>
+              <div class="floor-workflow-summary">
+                <div><small>RACK</small><strong id="floorWorkflowRack">—</strong></div>
+                <div><small>TICKET</small><strong id="floorWorkflowTicket">—</strong></div>
+                <div class="floor-workflow-summary__wide"><small>SYMPTOM</small><p id="floorWorkflowSymptom">—</p></div>
+              </div>
+              <section class="floor-workflow-evidence">
+                <div><small id="floorWorkflowEvidenceLabel">COLLECTED EVIDENCE</small><strong id="floorWorkflowEvidenceCount">0 / 0</strong></div>
+                <ul id="floorWorkflowEvidenceList"></ul>
+              </section>
+              <p class="floor-workflow-guide" id="floorWorkflowGuide">Evidence를 근거로 올바른 Root Cause를 선택하세요.</p>
+              <div class="floor-workflow-options" id="floorWorkflowOptions" role="group" aria-label="Floor incident response choices"></div>
+              <p class="floor-workflow-feedback" id="floorWorkflowFeedback" role="status" hidden></p>
             </div>
           </section>
         </div>
@@ -526,6 +556,7 @@
   <script src="storage.js"></script>
   <script src="analytics.js"></script>
   <script src="floor.js"></script>
+  <script src="workflow.js"></script>
   <script src="vendor/phaser.min.js"></script>
   <script src="phaser-floor.js"></script>
   <script src="app.js"></script>

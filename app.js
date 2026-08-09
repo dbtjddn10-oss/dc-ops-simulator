@@ -3,6 +3,7 @@
 
   // ---------------- v1.0 설정 ----------------
   const APP_VERSION = "v1.0";
+  const Workflow = window.DCOpsWorkflow;
   // URL의 테스트 값은 브라우저 회귀 테스트용입니다. 일반 실행에서는 아래 기본값이 사용됩니다.
   const query = new URLSearchParams(window.location.search);
   const testNumber = (name, fallback) => {
@@ -346,6 +347,24 @@
     floorObjectivesCloseBtn: document.querySelector("#floorObjectivesCloseBtn"),
     floorTerminalPopup: document.querySelector("#floorTerminalPopup"),
     floorTerminalCloseBtn: document.querySelector("#floorTerminalCloseBtn"),
+    floorTerminalWorkflow: document.querySelector("#floorTerminalWorkflow"),
+    floorTerminalWorkflowStep: document.querySelector("#floorTerminalWorkflowStep"),
+    floorTerminalWorkflowStatus: document.querySelector("#floorTerminalWorkflowStatus"),
+    floorTerminalWorkflowGuide: document.querySelector("#floorTerminalWorkflowGuide"),
+    floorTerminalWorkflowBtn: document.querySelector("#floorTerminalWorkflowBtn"),
+    floorWorkflowPopup: document.querySelector("#floorWorkflowPopup"),
+    floorWorkflowCloseBtn: document.querySelector("#floorWorkflowCloseBtn"),
+    floorWorkflowEyebrow: document.querySelector("#floorWorkflowEyebrow"),
+    floorWorkflowTitle: document.querySelector("#floorWorkflowTitle"),
+    floorWorkflowRack: document.querySelector("#floorWorkflowRack"),
+    floorWorkflowTicket: document.querySelector("#floorWorkflowTicket"),
+    floorWorkflowSymptom: document.querySelector("#floorWorkflowSymptom"),
+    floorWorkflowEvidenceLabel: document.querySelector("#floorWorkflowEvidenceLabel"),
+    floorWorkflowEvidenceCount: document.querySelector("#floorWorkflowEvidenceCount"),
+    floorWorkflowEvidenceList: document.querySelector("#floorWorkflowEvidenceList"),
+    floorWorkflowGuide: document.querySelector("#floorWorkflowGuide"),
+    floorWorkflowOptions: document.querySelector("#floorWorkflowOptions"),
+    floorWorkflowFeedback: document.querySelector("#floorWorkflowFeedback"),
     languageToggle: document.querySelector("#languageToggle"),
     newShiftBtn: document.querySelector("#newShiftBtn"),
     appVersion: document.querySelector("#appVersion")
@@ -453,6 +472,11 @@
       eventHistory: ticket.eventHistory.map((event) => ({ ...event })),
       diagnosisOptions: cloneOptions(ticket.diagnosisOptions),
       actionOptions: cloneOptions(ticket.actionOptions),
+      verification: ticket.verification ? {
+        ...ticket.verification,
+        requiredCommands: [...ticket.verification.requiredCommands],
+        completedCommands: [...ticket.verification.completedCommands]
+      } : null,
       wrongDiagnoses: [...ticket.wrongDiagnoses],
       wrongActions: [...ticket.wrongActions],
       diagnosticCommands: { ...(ticket.diagnosticCommands ?? {}) },
@@ -656,12 +680,32 @@ TERMINAL
     }
   });
 
+  function createVerificationState(ticket) {
+    return Workflow.createVerificationState(ticket?.usefulCommands);
+  }
+
+  function isVerificationCommand(ticket, parsedCommand) {
+    return ticket?.stage === "verification"
+      && Boolean(parsedCommand.canonical)
+      && ticket.verification?.requiredCommands?.includes(parsedCommand.canonical);
+  }
+
+  function getVerificationOutput(rack, parsedCommand) {
+    const outputBuilder = DEFAULT_TERMINAL_OUTPUTS[parsedCommand.canonical];
+    return outputBuilder
+      ? outputBuilder(rack, parsedCommand.normalized)
+      : `${parsedCommand.normalized}\nSystem state: healthy`;
+  }
+
   function getTerminalSession(rack) {
     if (!rack) return null;
     return rack.ticket?.terminalHistory ?? rack.terminalHistory;
   }
 
   function getTerminalOutput(rack, parsedCommand) {
+    if (rack.ticket?.stage === "verification" && parsedCommand.canonical) {
+      return getVerificationOutput(rack, parsedCommand);
+    }
     const ticketOutput = rack.ticket?.diagnosticCommands?.[parsedCommand.canonical];
     const targetCommands = new Set(["ping", "curl", "nslookup", "traceroute"]);
     const hasExplicitTarget = targetCommands.has(parsedCommand.canonical) && parsedCommand.normalized !== parsedCommand.canonical;
@@ -783,6 +827,7 @@ TERMINAL
     let valid = Boolean(parsed.canonical);
     let useful = false;
     let output;
+    let verificationPassed = false;
 
     if (!valid) {
       const unknownCommand = parsed.normalized.split(" ")[0];
@@ -800,6 +845,12 @@ TERMINAL
           game.stats.usefulCommands += 1;
         }
       }
+      if (isVerificationCommand(ticket, parsed)) {
+        verificationPassed = Workflow.applyVerificationCommand(ticket.verification, parsed.canonical);
+        if (verificationPassed) {
+          output = `${output}\n\nVERIFICATION PASSED\nINCIDENT RESOLVED`;
+        }
+      }
     }
 
     const executedAt = Date.now();
@@ -815,8 +866,15 @@ TERMINAL
       recordTicketEvent(ticket, "COMMAND_EXECUTED", parsed.normalized, executedAt);
       if (useful) recordTicketEvent(ticket, "EVIDENCE_CAPTURED", parsed.canonical, executedAt);
     }
+    if (verificationPassed) {
+      recordTicketEvent(ticket, "VERIFICATION_PASSED", parsed.canonical, ticket.verification.passedAt);
+      resolveIncident(rack, { floorVerification: true, verificationCommand: parsed.normalized });
+      renderTerminal({ scrollToBottom: true });
+      return;
+    }
     updateTicketPanel();
     updateActionControls();
+    renderTerminalWorkflow();
     renderTerminal({ scrollToBottom: true });
   }
 
@@ -869,6 +927,122 @@ TERMINAL
     return Floor.OPERATORS.find((operator) => operator.id === game.floor.operatorId) ?? Floor.OPERATORS[0];
   }
 
+  function workflowCopy(korean, english) {
+    return game.floor.language === "en" ? english : korean;
+  }
+
+  function renderTerminalWorkflow() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+    const lastResolution = rack?.lastFloorResolution;
+    elements.floorTerminalWorkflow.hidden = !ticket && !lastResolution;
+    if (!ticket && !lastResolution) return;
+
+    elements.floorTerminalWorkflowBtn.hidden = false;
+    if (!ticket && lastResolution) {
+      elements.floorTerminalWorkflow.className = "terminal-workflow resolved";
+      elements.floorTerminalWorkflowStep.textContent = "VERIFICATION PASSED";
+      elements.floorTerminalWorkflowStatus.textContent = "INCIDENT RESOLVED";
+      elements.floorTerminalWorkflowGuide.textContent = workflowCopy(
+        `${lastResolution.ticketId} 복구가 확인되어 Rack이 정상 상태로 전환되었습니다.`,
+        `${lastResolution.ticketId} recovery was verified and the Rack returned to healthy state.`
+      );
+      elements.floorTerminalWorkflowBtn.hidden = true;
+      return;
+    }
+
+    const evidenceCount = getEvidenceCount(ticket);
+    const requiredCount = ticket.requiredEvidenceCount;
+    elements.floorTerminalWorkflow.className = `terminal-workflow stage-${ticket.stage}`;
+
+    if (ticket.stage === "verification") {
+      const requiredCommand = ticket.verification?.requiredCommands?.[0] ?? "uptime";
+      elements.floorTerminalWorkflowStep.textContent = "RECOVERY APPLIED";
+      elements.floorTerminalWorkflowStatus.textContent = "VERIFICATION PENDING";
+      elements.floorTerminalWorkflowGuide.textContent = workflowCopy(
+        `Terminal에서 ${requiredCommand} 명령으로 정상 복구 여부를 확인하세요.`,
+        `Run ${requiredCommand} in Terminal to verify the healthy state.`
+      );
+      elements.floorTerminalWorkflowBtn.hidden = true;
+      return;
+    }
+
+    elements.floorTerminalWorkflowStep.textContent = "INCIDENT INVESTIGATION";
+    elements.floorTerminalWorkflowStatus.textContent = requiredCount > 0
+      ? `EVIDENCE ${Math.min(evidenceCount, requiredCount)} / ${requiredCount}`
+      : `EVIDENCE ${evidenceCount} / OPTIONAL`;
+    if (ticket.stage === "verification") {
+      showToast("Recovery가 적용되었습니다. Terminal Verification을 완료하세요.");
+      return;
+    }
+    if (ticket.stage === "action") {
+      elements.floorTerminalWorkflowGuide.textContent = workflowCopy(
+        "Root Cause가 확인되었습니다. 올바른 Recovery Action을 선택하세요.",
+        "Root Cause confirmed. Select the correct Recovery Action."
+      );
+      elements.floorTerminalWorkflowBtn.textContent = workflowCopy("Recovery 선택", "SELECT RECOVERY");
+      elements.floorTerminalWorkflowBtn.disabled = false;
+      return;
+    }
+
+    const evidenceReady = hasRequiredEvidence(ticket);
+    elements.floorTerminalWorkflowGuide.textContent = evidenceReady
+      ? workflowCopy("Diagnosis를 시작할 수 있습니다.", "Diagnosis is ready.")
+      : workflowCopy("추가 Evidence가 필요합니다.", "More Evidence is required.");
+    elements.floorTerminalWorkflowBtn.textContent = ticket.stage === "diagnosis"
+      ? workflowCopy("진단 계속", "CONTINUE DIAGNOSIS")
+      : workflowCopy("진단하기", "DIAGNOSE");
+    elements.floorTerminalWorkflowBtn.disabled = !evidenceReady;
+  }
+
+  function renderFloorWorkflowPopup() {
+    if (!['diagnosis', 'recovery'].includes(activeScenePopup)) return;
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+    if (!ticket) return;
+
+    const isDiagnosis = activeScenePopup === "diagnosis";
+    const options = isDiagnosis ? ticket.diagnosisOptions : ticket.actionOptions;
+    const attempted = isDiagnosis ? ticket.wrongDiagnoses : ticket.wrongActions;
+    elements.floorWorkflowEyebrow.textContent = isDiagnosis ? "INCIDENT INVESTIGATION" : "RECOVERY CONTROL";
+    elements.floorWorkflowTitle.textContent = isDiagnosis ? "ROOT CAUSE DIAGNOSIS" : "RECOVERY ACTION";
+    elements.floorWorkflowRack.textContent = ticket.affectedRack;
+    elements.floorWorkflowTicket.textContent = ticket.ticketId;
+    elements.floorWorkflowSymptom.textContent = ticket.symptom;
+    elements.floorWorkflowEvidenceLabel.textContent = isDiagnosis ? "COLLECTED EVIDENCE" : "CONFIRMED ROOT CAUSE";
+    elements.floorWorkflowEvidenceCount.textContent = isDiagnosis
+      ? ticket.requiredEvidenceCount > 0
+        ? `${Math.min(getEvidenceCount(ticket), ticket.requiredEvidenceCount)} / ${ticket.requiredEvidenceCount}`
+        : `${getEvidenceCount(ticket)} / OPTIONAL`
+      : ticket.correctDiagnosis;
+    const evidenceItems = isDiagnosis
+      ? ticket.investigationEvidence
+      : [ticket.rootCause];
+    elements.floorWorkflowEvidenceList.innerHTML = evidenceItems.length
+      ? evidenceItems.map((item) => `<li><code>${escapeHtml(item)}</code></li>`).join("")
+      : `<li>${escapeHtml(workflowCopy("수집된 Evidence가 없습니다.", "No Evidence collected."))}</li>`;
+    elements.floorWorkflowGuide.textContent = isDiagnosis
+      ? workflowCopy("Evidence를 근거로 올바른 Root Cause를 선택하세요.", "Select the Root Cause supported by the Evidence.")
+      : workflowCopy("확인된 Root Cause에 맞는 Recovery Action을 선택하세요.", "Select the Recovery Action that matches the confirmed Root Cause.");
+    elements.floorWorkflowOptions.innerHTML = (options ?? []).map((option, index) => {
+      const wasWrong = attempted.includes(option.optionId);
+      return `<button class="floor-workflow-option${wasWrong ? " wrong" : ""}" type="button" data-floor-kind="${isDiagnosis ? "diagnosis" : "action"}" data-option-id="${escapeHtml(option.optionId)}" ${wasWrong ? "disabled" : ""}><span>${String.fromCharCode(65 + index)}</span>${escapeHtml(option.label)}</button>`;
+    }).join("");
+    elements.floorWorkflowFeedback.hidden = attempted.length === 0;
+    elements.floorWorkflowFeedback.textContent = attempted.length
+      ? workflowCopy("선택이 올바르지 않습니다. 다른 Evidence와 선택지를 다시 확인하세요.", "Incorrect choice. Review the Evidence and remaining options.")
+      : "";
+  }
+
+  function openFloorWorkflowFromTerminal() {
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const ticket = rack?.ticket;
+    if (!ticket) return;
+    if (ticket.stage === "reported") diagnoseSelected();
+    if (ticket.stage === "diagnosis") setScenePopup("diagnosis");
+    if (ticket.stage === "action") setScenePopup("recovery");
+  }
+
   function isPhaserFloorReady() {
     return Boolean(phaserFloorController?.isReady());
   }
@@ -879,12 +1053,14 @@ TERMINAL
   }
 
   function setScenePopup(nextPopup = "none") {
-    const popup = ["terminal", "objectives", "incident"].includes(nextPopup) ? nextPopup : "none";
+    const popup = ["terminal", "objectives", "incident", "diagnosis", "recovery"].includes(nextPopup) ? nextPopup : "none";
+    const workflowOpen = popup === "diagnosis" || popup === "recovery";
     activeScenePopup = popup;
     elements.floorMode.dataset.activePopup = popup;
     elements.floorTerminalPopup.hidden = popup !== "terminal";
     elements.floorObjectivesPopup.hidden = popup !== "objectives";
     elements.floorIncidentPopup.hidden = popup !== "incident";
+    elements.floorWorkflowPopup.hidden = !workflowOpen;
     elements.floorObjectivesOpenBtn.setAttribute("aria-expanded", String(popup === "objectives"));
     elements.floorIncidentOpenBtn.setAttribute("aria-expanded", String(popup === "incident"));
 
@@ -899,6 +1075,10 @@ TERMINAL
     if (document.activeElement === elements.terminalInput) elements.terminalInput.blur();
     if (popup === "objectives") requestAnimationFrame(() => elements.floorObjectivesCloseBtn.focus({ preventScroll: true }));
     if (popup === "incident") requestAnimationFrame(() => elements.floorIncidentCloseBtn.focus({ preventScroll: true }));
+    if (workflowOpen) {
+      renderFloorWorkflowPopup();
+      requestAnimationFrame(() => elements.floorWorkflowCloseBtn.focus({ preventScroll: true }));
+    }
     if (popup === "none") requestAnimationFrame(focusFloorScene);
   }
 
@@ -1013,7 +1193,8 @@ TERMINAL
       return;
     }
 
-    const diagnosed = ticket.stage === "action";
+    const diagnosed = ["action", "verification"].includes(ticket.stage);
+    const recoveryApplied = ticket.stage === "verification";
     const evidenceCollected = getEvidenceCount(ticket) > 0;
     elements.floorIncidentTicket.textContent = ticket.ticketId;
     elements.floorIncidentCategory.textContent = ticket.category;
@@ -1021,7 +1202,9 @@ TERMINAL
     elements.floorIncidentName.textContent = diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
     elements.floorIncidentRack.textContent = rackLabel(incidentRack.id);
     elements.floorIncidentSeverity.textContent = ticket.severity;
-    elements.floorIncidentStage.textContent = floorText(diagnosed ? "stageAction" : "stageReported");
+    elements.floorIncidentStage.textContent = recoveryApplied
+      ? workflowCopy("검증 대기", "VERIFICATION")
+      : floorText(diagnosed ? "stageAction" : "stageReported");
     elements.floorIncidentSla.textContent = ticket.slaBreached ? "BREACH" : formatClock(getSlaRemaining(ticket));
     elements.floorIncidentHint.textContent = ticket.investigationHint || ticket.symptom;
 
@@ -1029,7 +1212,7 @@ TERMINAL
       { key: "objectiveSelectRack", complete: game.selectedId === incidentRack.id },
       { key: "objectiveCollectEvidence", complete: evidenceCollected },
       { key: "objectiveDiagnose", complete: diagnosed },
-      { key: "objectiveRecover", complete: false }
+      { key: "objectiveRecover", complete: recoveryApplied }
     ];
     elements.floorObjectives.innerHTML = objectives.map((objective) =>
       `<li class="${objective.complete ? "complete" : ""}"><i aria-hidden="true"></i>${escapeHtml(floorText(objective.key))}</li>`
@@ -1048,6 +1231,8 @@ TERMINAL
     });
     renderFloor();
     renderFloorBriefing();
+    renderTerminalWorkflow();
+    renderFloorWorkflowPopup();
   }
 
   function renderRacks(focusSelected = false) {
@@ -1055,7 +1240,7 @@ TERMINAL
       const info = STATUS_INFO[rack.status];
       const ticket = getIncident(rack);
       const selected = game.selectedId === rack.id ? "selected" : "";
-      const diagnosed = ticket?.stage === "action" ? "diagnosed" : "";
+      const diagnosed = ["action", "verification"].includes(ticket?.stage) ? "diagnosed" : "";
       const metrics = Object.entries(rack.metrics).map(([name, value]) => {
         const lowNetwork = rack.status === "critical" && name === "Network" && value <= 10;
         const level = lowNetwork ? "high low" : value >= 85 ? "high" : value >= 70 ? "medium" : "";
@@ -1112,7 +1297,7 @@ TERMINAL
     }
 
     const remaining = getSlaRemaining(ticket);
-    const diagnosed = ticket.stage === "action";
+    const diagnosed = ["action", "verification"].includes(ticket.stage);
     elements.ticketPanel.className = `ticket-panel${ticket.slaBreached ? " sla-breached" : ""}`;
     elements.ticketEmpty.hidden = true;
     elements.ticketContent.hidden = false;
@@ -1182,10 +1367,15 @@ TERMINAL
       ticket.stage === "reported" &&
       !hasRequiredEvidence(ticket)
     );
-    elements.diagnoseBtn.disabled = locked;
-    elements.diagnoseBtn.textContent = locked ? "진단 잠김 · DIAGNOSE LOCKED" : "진단 · DIAGNOSE";
-    elements.diagnosisGateMessage.hidden = !locked;
-    if (locked) {
+    const verificationPending = ticket?.stage === "verification";
+    elements.diagnoseBtn.disabled = locked || verificationPending;
+    elements.diagnoseBtn.textContent = verificationPending
+      ? "검증 대기 · VERIFY IN TERMINAL"
+      : locked ? "진단 잠김 · DIAGNOSE LOCKED" : "진단 · DIAGNOSE";
+    elements.diagnosisGateMessage.hidden = !locked && !verificationPending;
+    if (verificationPending) {
+      elements.diagnosisGateMessage.textContent = `Verification required: ${ticket.verification?.requiredCommands?.join(", ") ?? "uptime"}`;
+    } else if (locked) {
       const remaining = Math.max(0, ticket.requiredEvidenceCount - getEvidenceCount(ticket));
       elements.diagnosisGateMessage.textContent = `Investigation required: ${remaining} more evidence`;
     } else {
@@ -1194,7 +1384,7 @@ TERMINAL
   }
 
   function getStageLabel(stage) {
-    return { reported: "미진단", diagnosis: "진단 중", action: "ACTION" }[stage] ?? "UNKNOWN";
+    return { reported: "미진단", diagnosis: "진단 중", action: "ACTION", verification: "VERIFY" }[stage] ?? "UNKNOWN";
   }
 
   function getOpenQueue() {
@@ -1705,6 +1895,8 @@ TERMINAL
     updateIncidentQueue();
     updateShiftPanel();
     renderTerminal();
+    renderTerminalWorkflow();
+    renderFloorWorkflowPopup();
     elements.historyButtonCount.textContent = game.incidentHistory.length;
     elements.archiveButtonCount.textContent = game.archive.shifts.length;
     if (!elements.historyModal.hidden) renderHistory();
@@ -1749,6 +1941,7 @@ TERMINAL
       : availableIncidents;
     const rack = candidates[Math.floor(Math.random() * candidates.length)];
     const incident = repeatSafePool[Math.floor(Math.random() * repeatSafePool.length)];
+    rack.lastFloorResolution = null;
     game.lastIncidentId = incident.incidentId;
     const ticketId = `TKT-${String(++game.ticketSequence).padStart(4, "0")}`;
     const createdAt = Date.now();
@@ -1776,6 +1969,7 @@ TERMINAL
       stage: "reported",
       diagnosisOptions: null,
       actionOptions: null,
+      verification: null,
       wrongDiagnoses: [],
       wrongActions: [],
       terminalHistory: [],
@@ -1854,6 +2048,10 @@ TERMINAL
       addLog("WARNING", `${rackLabel(rack.id)} 복구 불필요 - 정상 운영 중`);
       return;
     }
+    if (rack.ticket.stage === "verification") {
+      showToast("Recovery가 적용되었습니다. Terminal에서 정상 상태를 Verification하세요.");
+      return;
+    }
     if (rack.ticket.stage !== "action") {
       if (!rack.ticket.prematureRecoveryPenalized) {
         rack.ticket.prematureRecoveryPenalized = true;
@@ -1871,16 +2069,38 @@ TERMINAL
     updateDecisionPanel();
   }
 
-  function resolveIncident(rack) {
+  function beginFloorVerification(rack) {
+    const ticket = rack.ticket;
+    ticket.stage = "verification";
+    ticket.verification = createVerificationState(ticket);
+    rack.metrics = createNormalMetrics();
+    recordTicketEvent(ticket, "RECOVERY_APPLIED", ticket.correctAction, ticket.verification.appliedAt);
+    addLog("RECOVERY APPLIED", `${ticket.ticketId} / verification pending`);
+    showToast("RECOVERY APPLIED · Terminal에서 서비스 정상 여부를 확인하세요.", "success");
+    setScenePopup("terminal");
+    refreshUI();
+    renderTerminal({ scrollToBottom: true });
+  }
+
+  function resolveIncident(rack, { floorVerification = false, verificationCommand = "" } = {}) {
     const ticket = rack.ticket;
     const awardedScore = ticket.rewardScore ?? ticket.score;
     ticket.resolvedAt = Date.now();
     recordTicketEvent(ticket, "RECOVERY_COMPLETED", ticket.correctAction, ticket.resolvedAt);
+    recordTicketEvent(ticket, "INCIDENT_RESOLVED", verificationCommand || ticket.correctAction, ticket.resolvedAt);
     if (ticket.countedInShift) {
       game.stats.resolvedIncidents += 1;
       game.stats.totalResolutionTime += (ticket.resolvedAt - ticket.createdAt) / 1000;
     }
     game.incidentHistory.push(createResolvedRecord(ticket, awardedScore));
+    if (floorVerification) {
+      rack.terminalHistory = ticket.terminalHistory.map((record) => ({ ...record }));
+      rack.lastFloorResolution = {
+        ticketId: ticket.ticketId,
+        verificationCommand,
+        resolvedAt: ticket.resolvedAt
+      };
+    }
     rack.status = ticket.previousStatus ?? "healthy";
     rack.metrics = ticket.previousMetrics ? { ...ticket.previousMetrics } : createNormalMetrics();
     rack.ticket = null;
@@ -1890,22 +2110,20 @@ TERMINAL
     recalculateTemperature();
     elements.scoreTrend.textContent = `복구 성공 +${awardedScore} PTS`;
     addLog("RECOVERY", `${rackLabel(rack.id)} restored / ${ticket.ticketId} +${awardedScore} PTS (${ticket.difficulty})`);
-    showToast(`서비스가 정상 복구되었습니다. +${awardedScore}점`, "success");
+    showToast(`${floorVerification ? "VERIFICATION PASSED · INCIDENT RESOLVED" : "서비스가 정상 복구되었습니다."} +${awardedScore}점`, "success");
     refreshUI();
   }
 
-  function handleDecisionSelection(event) {
-    const button = event.target.closest("[data-option-id]");
-    if (!button || button.disabled) return;
+  function applyDecisionOption(kind, optionId, source = "dashboard") {
     const rack = racks.find((item) => item.id === game.selectedId);
     const ticket = rack?.ticket;
     if (!ticket || rack.status !== "critical") return;
 
-    const isDiagnosis = button.dataset.kind === "diagnosis";
+    const isDiagnosis = kind === "diagnosis";
     if (ticket.stage !== (isDiagnosis ? "diagnosis" : "action")) return;
     const options = isDiagnosis ? ticket.diagnosisOptions : ticket.actionOptions;
     const attempted = isDiagnosis ? ticket.wrongDiagnoses : ticket.wrongActions;
-    const option = (options ?? []).find((item) => item.optionId === button.dataset.optionId);
+    const option = (options ?? []).find((item) => item.optionId === optionId);
     if (!option || attempted.includes(option.optionId)) return;
 
     if (!option.isCorrect) {
@@ -1922,6 +2140,7 @@ TERMINAL
       showToast(`${isDiagnosis ? "잘못된 Diagnosis" : "잘못된 Action"}입니다. -${penalty}점`, "error");
       updateDashboard();
       updateDecisionPanel();
+      renderFloorWorkflowPopup();
       return;
     }
 
@@ -1932,12 +2151,29 @@ TERMINAL
       recordTicketEvent(ticket, "DIAGNOSIS_CONFIRMED", ticket.correctDiagnosis);
       addLog("DIAG OK", ticket.correctDiagnosis);
       showToast("정확한 진단입니다. Root Cause를 확인하고 Action을 선택하세요.", "success");
+      if (source === "floor") setScenePopup("recovery");
       refreshUI();
       return;
     }
 
     if (ticket.countedInShift) game.stats.correctActions += 1;
+    if (source === "floor") {
+      beginFloorVerification(rack);
+      return;
+    }
     resolveIncident(rack);
+  }
+
+  function handleDecisionSelection(event) {
+    const button = event.target.closest("[data-option-id]");
+    if (!button || button.disabled) return;
+    applyDecisionOption(button.dataset.kind, button.dataset.optionId, "dashboard");
+  }
+
+  function handleFloorWorkflowSelection(event) {
+    const button = event.target.closest("[data-option-id]");
+    if (!button || button.disabled) return;
+    applyDecisionOption(button.dataset.floorKind, button.dataset.optionId, "floor");
   }
 
   // ---------------- SLA와 교대 타이머 ----------------
@@ -2592,7 +2828,10 @@ TERMINAL
     elements.floorObjectivesOpenBtn.addEventListener("click", () => setScenePopup("objectives"));
     elements.floorObjectivesCloseBtn.addEventListener("click", () => setScenePopup("none"));
     elements.floorTerminalCloseBtn.addEventListener("click", () => setScenePopup("none"));
-    [elements.floorTerminalPopup, elements.floorObjectivesPopup, elements.floorIncidentPopup].forEach((popup) => {
+    elements.floorTerminalWorkflowBtn.addEventListener("click", openFloorWorkflowFromTerminal);
+    elements.floorWorkflowCloseBtn.addEventListener("click", () => setScenePopup("none"));
+    elements.floorWorkflowOptions.addEventListener("click", handleFloorWorkflowSelection);
+    [elements.floorTerminalPopup, elements.floorObjectivesPopup, elements.floorIncidentPopup, elements.floorWorkflowPopup].forEach((popup) => {
       popup.addEventListener("click", (event) => {
         if (event.target.closest("[data-scene-popup-close]")) setScenePopup("none");
       });

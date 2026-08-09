@@ -4,7 +4,7 @@
   "private": true,
   "description": "Browser-based data center incident response simulator",
   "scripts": {
-    "check": "node --check app.js && node --check incidents.js && node --check analytics.js && node --check storage.js && node --check floor.js && node --check phaser-floor.js && node --check scripts/vendor-phaser.js && node --check tests/run-tests.js",
+    "check": "node --check app.js && node --check incidents.js && node --check analytics.js && node --check storage.js && node --check floor.js && node --check workflow.js && node --check phaser-floor.js && node --check scripts/vendor-phaser.js && node --check tests/run-tests.js",
     "vendor:phaser": "node scripts/vendor-phaser.js",
     "test": "node tests/run-tests.js"
   },

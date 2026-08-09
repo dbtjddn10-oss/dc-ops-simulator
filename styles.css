@@ -2316,6 +2316,39 @@ body:not(.dashboard-expanded) .app { width: min(1920px, 100%); max-width: none; 
 .scene-popup--terminal .terminal-header h2 { font-size: 18px; }
 .scene-popup--terminal .terminal-header h2 span { font-size: 15px; }
 .scene-popup--terminal .terminal-sensor { flex: 0 0 auto; font-size: 14px; }
+.terminal-workflow {
+  display: flex;
+  min-height: 72px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 18px;
+  border-block: 1px solid rgba(67, 132, 112, 0.42);
+  background: linear-gradient(90deg, rgba(16, 51, 43, 0.78), rgba(3, 15, 13, 0.92));
+}
+.terminal-workflow > div { min-width: 0; }
+.terminal-workflow small { display: block; color: #6fa894; font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.12em; }
+.terminal-workflow strong { display: block; margin-top: 3px; color: #aafbd9; font: 800 15px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.terminal-workflow p { margin: 3px 0 0; color: #a4beb5; font-size: 11px; }
+.terminal-workflow button {
+  flex: 0 0 auto;
+  min-height: 36px;
+  padding: 8px 14px;
+  border: 1px solid #4fcfa1;
+  border-radius: 4px;
+  color: #d9fff0;
+  background: rgba(33, 139, 105, 0.22);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 800;
+}
+.terminal-workflow button:disabled { border-color: #38564c; color: #668076; background: #0b1814; cursor: not-allowed; }
+.terminal-workflow.stage-verification { border-color: rgba(255, 200, 87, 0.55); background: linear-gradient(90deg, rgba(75, 55, 15, 0.82), rgba(20, 15, 4, 0.94)); }
+.terminal-workflow.stage-verification small,
+.terminal-workflow.stage-verification strong { color: #ffd878; }
+.terminal-workflow.resolved { border-color: rgba(90, 222, 168, 0.7); box-shadow: inset 3px 0 #42e3a4; }
+.terminal-workflow.resolved small,
+.terminal-workflow.resolved strong { color: #80ffc8; }
 .scene-popup--terminal .terminal-screen {
   flex: 1 1 300px;
   min-height: 180px;
@@ -2335,6 +2368,53 @@ body:not(.dashboard-expanded) .app { width: min(1920px, 100%); max-width: none; 
 .scene-popup--objectives .floor-objectives ol { display: grid; grid-template-columns: 1fr; gap: 9px; padding: 16px 20px 4px; }
 .scene-popup--objectives .floor-objectives li { grid-template-columns: 12px 1fr; gap: 9px; padding: 11px 12px; font-size: 14px; line-height: 1.45; }
 .scene-popup--objectives .floor-objectives li i { width: 10px; height: 10px; margin-top: 4px; }
+
+.scene-popup--workflow .floor-workflow-panel {
+  width: min(760px, 100%);
+  max-height: 100%;
+  overflow: auto;
+  border-color: rgba(104, 212, 226, 0.78);
+}
+.floor-workflow-panel .scene-popup__heading h3 { margin: 3px 0 0; color: #e8fbff; font-size: 21px; }
+.floor-workflow-summary {
+  display: grid;
+  grid-template-columns: 150px 170px minmax(0, 1fr);
+  border-bottom: 1px solid #294a5a;
+}
+.floor-workflow-summary > div { min-width: 0; padding: 15px 18px; border-right: 1px solid #294a5a; }
+.floor-workflow-summary > div:last-child { border-right: 0; }
+.floor-workflow-summary small,
+.floor-workflow-evidence small { color: #648698; font: 800 9px ui-monospace, SFMono-Regular, Consolas, monospace; letter-spacing: 0.1em; }
+.floor-workflow-summary strong { display: block; margin-top: 6px; color: #dbf7ff; font: 800 14px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.floor-workflow-summary p { margin: 6px 0 0; color: #d4e6ed; font-size: 13px; line-height: 1.5; }
+.floor-workflow-evidence { padding: 16px 18px 12px; border-bottom: 1px solid #203d4b; background: rgba(3, 12, 18, 0.62); }
+.floor-workflow-evidence > div { display: flex; justify-content: space-between; gap: 12px; }
+.floor-workflow-evidence strong { color: #75e9ef; font: 800 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.floor-workflow-evidence ul { display: grid; gap: 6px; margin: 10px 0 0; padding: 0; list-style: none; }
+.floor-workflow-evidence li { padding: 8px 10px; border-left: 2px solid #3d8e9e; color: #b9d1da; background: rgba(29, 66, 77, 0.28); font-size: 12px; }
+.floor-workflow-evidence code { color: #b8f4ff; }
+.floor-workflow-guide { margin: 0; padding: 15px 18px 8px; color: #9db4bf; font-size: 13px; }
+.floor-workflow-options { display: grid; gap: 8px; padding: 8px 18px 18px; }
+.floor-workflow-option {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr);
+  align-items: center;
+  gap: 11px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border: 1px solid #365a6b;
+  border-radius: 4px;
+  color: #d8e9ef;
+  text-align: left;
+  background: linear-gradient(90deg, rgba(18, 48, 61, 0.8), rgba(6, 17, 24, 0.92));
+  cursor: pointer;
+  font-size: 13px;
+}
+.floor-workflow-option span { display: grid; width: 28px; height: 28px; place-items: center; border: 1px solid #4f8497; color: #7eeffc; font: 800 12px ui-monospace, SFMono-Regular, Consolas, monospace; }
+.floor-workflow-option:hover,
+.floor-workflow-option:focus-visible { border-color: #6de6f2; color: #fff; outline: 0; }
+.floor-workflow-option.wrong { border-color: rgba(255, 77, 103, 0.38); color: #7e6269; background: rgba(54, 18, 25, 0.62); }
+.floor-workflow-feedback { margin: -6px 18px 18px; padding: 10px 12px; border: 1px solid rgba(255, 77, 103, 0.48); color: #ffb4c0; background: rgba(69, 17, 27, 0.5); font-size: 12px; }
 
 .floor-status-strip { margin-top: 6px; }
 .floor-status-strip > span { flex: 1 1 auto; justify-content: center; }
@@ -2383,11 +2463,22 @@ body:not(.dashboard-expanded) .app { width: min(1920px, 100%); max-width: none; 
   .scene-popup--terminal .terminal-hint { display: none; }
   .scene-popup--terminal .terminal-header h2 { font-size: 14px; }
   .scene-popup--terminal .terminal-header h2 span { display: block; margin: 3px 0 0; font-size: 12px; }
+  .terminal-workflow { min-height: 64px; padding: 8px 10px; }
+  .terminal-workflow strong { font-size: 12px; }
+  .terminal-workflow p { max-width: 210px; font-size: 9px; }
+  .terminal-workflow button { min-height: 32px; padding: 6px 9px; font-size: 9px; }
   .scene-popup--terminal .terminal-screen { min-height: 130px; padding: 11px; font-size: 13px; }
   .scene-popup--terminal .terminal-command { grid-template-columns: minmax(0, 1fr) auto; padding: 8px 10px; }
   .scene-popup--terminal .terminal-prompt { display: none; }
   .scene-popup--terminal .terminal-command input { font-size: 16px; }
   .scene-popup--terminal .terminal-shortcuts { min-height: 25px; padding: 5px 10px; }
+  .floor-workflow-summary { grid-template-columns: 1fr 1fr; }
+  .floor-workflow-summary__wide { grid-column: 1 / -1; border-top: 1px solid #294a5a; }
+  .floor-workflow-summary > div { padding: 10px 12px; }
+  .floor-workflow-evidence { padding: 12px; }
+  .floor-workflow-guide { padding: 12px 12px 6px; }
+  .floor-workflow-options { padding: 6px 12px 12px; }
+  .floor-workflow-option { min-height: 44px; font-size: 11px; }
 }
 
 @media (max-width: 420px) {

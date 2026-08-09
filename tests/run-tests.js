@@ -7,6 +7,7 @@ const vm = require("node:vm");
 const Analytics = require("../analytics.js");
 const Storage = require("../storage.js");
 const Floor = require("../floor.js");
+const Workflow = require("../workflow.js");
 const PhaserFloor = require("../phaser-floor.js");
 
 let checks = 0;
@@ -519,13 +520,38 @@ test("Scene-first HUD uses exclusive in-scene popups without persistent dashboar
   assert.match(html, /id="floorObjectivesPopup"[\s\S]*id="floorObjectives"/);
   assert.match(html, /id="floorIncidentOpenBtn"[\s\S]*id="floorIncidentPopup"/);
   assert.match(html, /id="floorIncidentPopup"[\s\S]*id="floorIncidentHint"/);
+  assert.match(html, /id="floorTerminalWorkflow"[\s\S]*id="floorWorkflowPopup"/);
   assert.doesNotMatch(html, /<aside class="floor-briefing"/);
   assert.doesNotMatch(html, /class="floor-status-strip"/);
   assert.doesNotMatch(html, /floor-bottom-hud|id="operatorCards"|id="floorMiniMap"|class="floor-controls"/);
   assert.match(appSource, /let activeScenePopup = "none"/);
   assert.match(appSource, /activeScenePopup === "none"/);
-  assert.match(appSource, /\["terminal", "objectives", "incident"\]\.includes\(nextPopup\)/);
+  assert.match(appSource, /\["terminal", "objectives", "incident", "diagnosis", "recovery"\]\.includes\(nextPopup\)/);
   assert.match(appSource, /setScenePopup\("terminal"\)/);
+});
+
+test("Floor verification remains pending until the required command is executed", () => {
+  const verification = Workflow.createVerificationState(["systemctl status nginx", "journalctl -u nginx"], 1000);
+  assert.equal(verification.status, "pending");
+  assert.deepEqual(verification.requiredCommands, ["systemctl status nginx"]);
+  assert.equal(Workflow.applyVerificationCommand(verification, "journalctl -u nginx", 2000), false);
+  assert.equal(verification.status, "pending");
+  assert.equal(verification.passedAt, null);
+});
+
+test("Floor verification passes only after healthy evidence command", () => {
+  const verification = Workflow.createVerificationState(["systemctl status nginx"], 1000);
+  assert.equal(Workflow.applyVerificationCommand(verification, "systemctl status nginx", 2500), true);
+  assert.equal(verification.status, "passed");
+  assert.deepEqual(verification.completedCommands, ["systemctl status nginx"]);
+  assert.equal(verification.passedAt, 2500);
+});
+
+test("Floor recovery uses verification gate while Dashboard retains immediate resolve path", () => {
+  const appSource = fs.readFileSync(path.join(__dirname, "..", "app.js"), "utf8");
+  assert.match(appSource, /if \(source === "floor"\) \{\s*beginFloorVerification\(rack\);\s*return;\s*\}\s*resolveIncident\(rack\)/);
+  assert.match(appSource, /verificationPassed[\s\S]*resolveIncident\(rack, \{ floorVerification: true/);
+  assert.match(appSource, /rack\.terminalHistory = ticket\.terminalHistory\.map/);
 });
 
 test("Terminal popup scrolls after layout and preserves manual history position during refresh", () => {
