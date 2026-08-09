@@ -16,6 +16,8 @@
     simulatedDurationMinutes: 8 * 60
   });
   const PLAYER_MOVE_TRANSITION_MS = 105;
+  // Keep the legacy ID for Shift/Archive compatibility; Phaser maps it to ops-front-v2/operator-a.
+  const FLOOR_OPERATOR_ID = "rookie";
 
   const testAutoMinMs = query.has("autoMinMs") ? testNumber("autoMinMs", 15000) : null;
   const testAutoMaxMs = query.has("autoMaxMs") ? testNumber("autoMaxMs", 30000) : null;
@@ -161,7 +163,7 @@
     floor: {
       player: { x: 6, y: 7, facing: "north" },
       phaserPlayer: null,
-      operatorId: "rookie",
+      operatorId: FLOOR_OPERATOR_ID,
       language: "ko",
       nearbyAssetId: null
     },
@@ -182,6 +184,8 @@
   let phaserFloorController = null;
   let terminalHistoryIndex = null;
   let terminalHistoryDraft = "";
+  let terminalScrollFrameId = null;
+  let activeScenePopup = "none";
 
   const elements = {
     rackGrid: document.querySelector("#rackGrid"),
@@ -332,11 +336,16 @@
     floorIncidentStage: document.querySelector("#floorIncidentStage"),
     floorIncidentSla: document.querySelector("#floorIncidentSla"),
     floorIncidentHint: document.querySelector("#floorIncidentHint"),
+    floorIncidentPopup: document.querySelector("#floorIncidentPopup"),
+    floorIncidentOpenBtn: document.querySelector("#floorIncidentOpenBtn"),
+    floorIncidentCloseBtn: document.querySelector("#floorIncidentCloseBtn"),
+    floorIncidentButtonCount: document.querySelector("#floorIncidentButtonCount"),
     floorObjectives: document.querySelector("#floorObjectives"),
-    floorMiniMap: document.querySelector("#floorMiniMap"),
-    floorStatusOperator: document.querySelector("#floorStatusOperator"),
-    floorSystemHealth: document.querySelector("#floorSystemHealth"),
-    operatorCards: document.querySelector("#operatorCards"),
+    floorObjectivesPopup: document.querySelector("#floorObjectivesPopup"),
+    floorObjectivesOpenBtn: document.querySelector("#floorObjectivesOpenBtn"),
+    floorObjectivesCloseBtn: document.querySelector("#floorObjectivesCloseBtn"),
+    floorTerminalPopup: document.querySelector("#floorTerminalPopup"),
+    floorTerminalCloseBtn: document.querySelector("#floorTerminalCloseBtn"),
     languageToggle: document.querySelector("#languageToggle"),
     newShiftBtn: document.querySelector("#newShiftBtn"),
     appVersion: document.querySelector("#appVersion")
@@ -661,8 +670,29 @@ TERMINAL
     return outputBuilder ? outputBuilder(rack, parsedCommand.normalized) : "";
   }
 
-  function renderTerminal() {
+  function scrollTerminalToLatest() {
+    if (terminalScrollFrameId !== null) cancelAnimationFrame(terminalScrollFrameId);
+    terminalScrollFrameId = requestAnimationFrame(() => {
+      terminalScrollFrameId = requestAnimationFrame(() => {
+        elements.terminalOutput.scrollTop = elements.terminalOutput.scrollHeight;
+        terminalScrollFrameId = null;
+      });
+    });
+  }
+
+  function finalizeTerminalRender(scrollToBottom, previousScrollTop) {
+    if (scrollToBottom) {
+      scrollTerminalToLatest();
+      return;
+    }
+    if (activeScenePopup === "terminal") {
+      elements.terminalOutput.scrollTop = Math.min(previousScrollTop, elements.terminalOutput.scrollHeight);
+    }
+  }
+
+  function renderTerminal({ scrollToBottom = false } = {}) {
     const rack = racks.find((item) => item.id === game.selectedId);
+    const previousScrollTop = elements.terminalOutput.scrollTop;
     elements.terminalOutput.innerHTML = "";
 
     if (!rack) {
@@ -677,6 +707,7 @@ TERMINAL
       message.className = "terminal-welcome";
       message.textContent = "Select a Rack to open a safe simulated terminal session.";
       elements.terminalOutput.append(message);
+      finalizeTerminalRender(scrollToBottom, previousScrollTop);
       return;
     }
 
@@ -723,7 +754,7 @@ TERMINAL
       elements.terminalOutput.append(entry);
     });
 
-    elements.terminalOutput.scrollTop = elements.terminalOutput.scrollHeight;
+    finalizeTerminalRender(scrollToBottom, previousScrollTop);
   }
 
   function clearTerminalSession() {
@@ -731,7 +762,7 @@ TERMINAL
     const history = getTerminalSession(rack);
     if (!history) return;
     history.length = 0;
-    renderTerminal();
+    renderTerminal({ scrollToBottom: true });
     elements.terminalInput.focus();
   }
 
@@ -786,7 +817,7 @@ TERMINAL
     }
     updateTicketPanel();
     updateActionControls();
-    renderTerminal();
+    renderTerminal({ scrollToBottom: true });
   }
 
   function handleTerminalSubmit(event) {
@@ -838,17 +869,6 @@ TERMINAL
     return Floor.OPERATORS.find((operator) => operator.id === game.floor.operatorId) ?? Floor.OPERATORS[0];
   }
 
-  function renderOperators() {
-    elements.operatorCards.innerHTML = Floor.OPERATORS.map((operator) => {
-      const selected = operator.id === game.floor.operatorId;
-      return `<button class="operator-card${selected ? " selected" : ""}" type="button" data-operator-id="${operator.id}" data-tone="${operator.tone}" aria-pressed="${selected}">
-        <span class="operator-card__avatar" aria-hidden="true">${operator.glyph}</span>
-        <span><strong>${escapeHtml(floorText(operator.nameKey))}</strong><small>${escapeHtml(floorText(operator.roleKey))}</small></span>
-        <span class="operator-card__check" aria-hidden="true">${selected ? "SELECTED" : ""}</span>
-      </button>`;
-    }).join("");
-  }
-
   function isPhaserFloorReady() {
     return Boolean(phaserFloorController?.isReady());
   }
@@ -856,6 +876,36 @@ TERMINAL
   function focusFloorScene() {
     if (isPhaserFloorReady()) phaserFloorController.focus();
     else elements.floorStage.focus({ preventScroll: true });
+  }
+
+  function setScenePopup(nextPopup = "none") {
+    const popup = ["terminal", "objectives", "incident"].includes(nextPopup) ? nextPopup : "none";
+    activeScenePopup = popup;
+    elements.floorMode.dataset.activePopup = popup;
+    elements.floorTerminalPopup.hidden = popup !== "terminal";
+    elements.floorObjectivesPopup.hidden = popup !== "objectives";
+    elements.floorIncidentPopup.hidden = popup !== "incident";
+    elements.floorObjectivesOpenBtn.setAttribute("aria-expanded", String(popup === "objectives"));
+    elements.floorIncidentOpenBtn.setAttribute("aria-expanded", String(popup === "incident"));
+
+    if (popup === "terminal") {
+      renderTerminal({ scrollToBottom: true });
+      requestAnimationFrame(() => {
+        if (!elements.terminalInput.disabled) elements.terminalInput.focus({ preventScroll: true });
+      });
+      return;
+    }
+
+    if (document.activeElement === elements.terminalInput) elements.terminalInput.blur();
+    if (popup === "objectives") requestAnimationFrame(() => elements.floorObjectivesCloseBtn.focus({ preventScroll: true }));
+    if (popup === "incident") requestAnimationFrame(() => elements.floorIncidentCloseBtn.focus({ preventScroll: true }));
+    if (popup === "none") requestAnimationFrame(focusFloorScene);
+  }
+
+  function closeScenePopup() {
+    if (activeScenePopup === "none") return false;
+    setScenePopup("none");
+    return true;
   }
 
   function updateFloorInteractionStatus(assetId = game.floor.nearbyAssetId) {
@@ -866,14 +916,6 @@ TERMINAL
     }
     const statusKey = asset.type === "rack" ? "nearbyRack" : "nearbyFacility";
     elements.floorInteractionStatus.textContent = floorText(statusKey, { asset: asset.label });
-  }
-
-  function updateFloorMiniMapPlayer(position = game.floor.phaserPlayer) {
-    const marker = elements.floorMiniMap.querySelector(".mini-map-player");
-    if (!marker || !position?.miniMap || !isPhaserFloorReady()) return;
-    marker.style.left = `${position.miniMap.xPercent}%`;
-    marker.style.top = `${position.miniMap.yPercent}%`;
-    marker.title = floorText(getFloorOperator().nameKey);
   }
 
   function syncPhaserFloorState() {
@@ -945,23 +987,12 @@ TERMINAL
     elements.floorPlayer.dataset.tone = operator.tone;
     elements.floorPlayerGlyph.textContent = operator.glyph;
     elements.floorPlayerLabel.textContent = floorText(operator.nameKey);
-    elements.floorStatusOperator.textContent = floorText(operator.nameKey);
     elements.floorInteractionPrompt.style.setProperty("--prompt-x", nearbyAsset?.x ?? game.floor.player.x);
     elements.floorInteractionPrompt.style.setProperty("--prompt-y", nearbyAsset?.y ?? game.floor.player.y);
     elements.floorInteractionPrompt.hidden = !nearbyAsset;
 
     updateFloorInteractionStatus(nearbyAsset?.id ?? null);
 
-    elements.floorMiniMap.innerHTML = Floor.FLOOR_ASSETS.map((asset) => {
-      const rack = asset.type === "rack" && asset.rackId <= racks.length ? racks.find((item) => item.id === asset.rackId) : null;
-      const classes = ["mini-map-node", asset.type];
-      if (asset.type === "facility") classes.push(`facility-${asset.facilityType.toLowerCase()}`);
-      if (rack?.ticket) classes.push("incident");
-      if (rack && game.selectedId === rack.id) classes.push("selected");
-      return `<i class="${classes.join(" ")}" style="grid-column:${asset.x};grid-row:${asset.y}" title="${asset.label}"></i>`;
-    }).join("") + (isPhaserFloorReady() && game.floor.phaserPlayer?.miniMap
-      ? `<i class="mini-map-player phaser-position" style="left:${game.floor.phaserPlayer.miniMap.xPercent}%;top:${game.floor.phaserPlayer.miniMap.yPercent}%" title="${floorText(getFloorOperator().nameKey)}"></i>`
-      : `<i class="mini-map-player" style="grid-column:${game.floor.player.x};grid-row:${game.floor.player.y}" title="${floorText(getFloorOperator().nameKey)}"></i>`);
     syncPhaserFloorState();
   }
 
@@ -969,6 +1000,9 @@ TERMINAL
     const selectedRack = racks.find((rack) => rack.id === game.selectedId);
     const incidentRack = selectedRack?.ticket ? selectedRack : racks.find((rack) => rack.ticket);
     const ticket = incidentRack?.ticket;
+    const activeIncidentCount = racks.filter((rack) => rack.ticket).length;
+    elements.floorIncidentButtonCount.textContent = String(activeIncidentCount);
+    elements.floorIncidentOpenBtn.classList.toggle("has-incident", activeIncidentCount > 0);
     elements.floorBriefing.classList.toggle("has-incident", Boolean(ticket));
     elements.floorIncidentEmpty.hidden = Boolean(ticket);
     elements.floorIncidentContent.hidden = !ticket;
@@ -1012,7 +1046,6 @@ TERMINAL
       button.classList.toggle("selected", selected);
       button.setAttribute("aria-pressed", String(selected));
     });
-    renderOperators();
     renderFloor();
     renderFloorBriefing();
   }
@@ -1052,8 +1085,6 @@ TERMINAL
     elements.tempTrend.textContent = game.temperature >= 25 ? "온도 상승 감지" : "냉각 시스템 정상";
     elements.floorHudScore.textContent = `${game.score} PTS`;
     elements.floorHudIncidents.textContent = String(openCount);
-    elements.floorSystemHealth.textContent = `${game.availability.toFixed(0)}%`;
-    elements.floorSystemHealth.previousElementSibling?.style.setProperty("--health", `${game.availability}%`);
 
     const selected = racks.find((rack) => rack.id === game.selectedId);
     if (!selected) {
@@ -2260,16 +2291,6 @@ TERMINAL
     elements.incidentQueue.querySelector(`[data-queue-rack-id="${game.selectedId}"]`)?.focus();
   }
 
-  function handleOperatorSelection(event) {
-    const button = event.target.closest("[data-operator-id]");
-    if (!button || !Floor.OPERATORS.some((operator) => operator.id === button.dataset.operatorId)) return;
-    game.floor.operatorId = button.dataset.operatorId;
-    renderOperators();
-    renderFloor();
-    focusFloorScene();
-    showToast(floorText("operatorSelected", { operator: floorText(getFloorOperator().nameKey) }));
-  }
-
   function handleLanguageSelection(event) {
     const button = event.target.closest("[data-language]");
     if (!button || !Object.hasOwn(Floor.TRANSLATIONS, button.dataset.language)) return;
@@ -2289,6 +2310,7 @@ TERMINAL
   }
 
   function showLegacyDashboard() {
+    setScenePopup("none");
     setFloorMenuOpen(false);
     document.body.classList.add("dashboard-expanded");
     elements.legacyOperations.open = true;
@@ -2319,6 +2341,7 @@ TERMINAL
     game.selectedId = asset.rackId;
     refreshUI();
     showToast(floorText("rackLinked", { asset: asset.label }));
+    setScenePopup("terminal");
   }
 
   function interactWithNearbyFloorAsset() {
@@ -2331,7 +2354,10 @@ TERMINAL
     const formControl = active instanceof HTMLElement
       && (active.matches("input, textarea, select, button") || active.isContentEditable);
     const modalOpen = managedModals.some((modal) => !modal.hidden);
-    return !formControl && !modalOpen && !document.body.classList.contains("dashboard-expanded");
+    return activeScenePopup === "none"
+      && !formControl
+      && !modalOpen
+      && !document.body.classList.contains("dashboard-expanded");
   }
 
   function initializePhaserFloor() {
@@ -2362,7 +2388,6 @@ TERMINAL
         onPlayerPositionChange(position) {
           game.floor.phaserPlayer = position;
           game.floor.player = { ...position.grid, facing: position.facing };
-          updateFloorMiniMapPlayer(position);
         },
         onNearbyAssetChange(assetId) {
           game.floor.nearbyAssetId = assetId;
@@ -2398,6 +2423,12 @@ TERMINAL
   }
 
   function handleFloorKeydown(event) {
+    if (event.key === "Escape" && closeScenePopup()) {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      return;
+    }
+
     const target = event.target;
     const formControl = target instanceof HTMLElement
       && (target.matches("input, textarea, select, button") || target.isContentEditable);
@@ -2449,6 +2480,12 @@ TERMINAL
   }
 
   function handleModalKeydown(event) {
+    if (event.key === "Escape" && activeScenePopup !== "none") {
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      closeScenePopup();
+      return;
+    }
     if (event.key === "Escape" && !elements.floorMenuPanel.hidden) {
       setFloorMenuOpen(false);
       elements.floorMenuToggleBtn.focus();
@@ -2538,7 +2575,6 @@ TERMINAL
     elements.terminalInput.addEventListener("keydown", handleTerminalHistoryKeydown);
     elements.terminalInput.addEventListener("input", resetTerminalHistoryNavigation);
     elements.terminalClearBtn.addEventListener("click", clearTerminalSession);
-    elements.operatorCards.addEventListener("click", handleOperatorSelection);
     elements.languageToggle.addEventListener("click", handleLanguageSelection);
     elements.floorAssets.addEventListener("click", handleFloorAssetClick);
     elements.floorMenuToggleBtn.addEventListener("click", toggleFloorMenu);
@@ -2551,9 +2587,20 @@ TERMINAL
     elements.floorArchiveBtn.addEventListener("click", openArchive);
     elements.floorDashboardBtn.addEventListener("click", showLegacyDashboard);
     elements.returnFloorViewBtn.addEventListener("click", returnToFloorMode);
+    elements.floorIncidentOpenBtn.addEventListener("click", () => setScenePopup("incident"));
+    elements.floorIncidentCloseBtn.addEventListener("click", () => setScenePopup("none"));
+    elements.floorObjectivesOpenBtn.addEventListener("click", () => setScenePopup("objectives"));
+    elements.floorObjectivesCloseBtn.addEventListener("click", () => setScenePopup("none"));
+    elements.floorTerminalCloseBtn.addEventListener("click", () => setScenePopup("none"));
+    [elements.floorTerminalPopup, elements.floorObjectivesPopup, elements.floorIncidentPopup].forEach((popup) => {
+      popup.addEventListener("click", (event) => {
+        if (event.target.closest("[data-scene-popup-close]")) setScenePopup("none");
+      });
+    });
     document.addEventListener("keydown", handleFloorKeydown);
     document.addEventListener("keyup", handleFloorKeyup);
     document.addEventListener("error", handleGameAssetError, true);
+    setScenePopup("none");
     initializePhaserFloor();
     applyFloorLanguage();
     refreshUI();

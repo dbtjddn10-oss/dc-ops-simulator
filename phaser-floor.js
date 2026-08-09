@@ -9,49 +9,173 @@
   const HUD_OVERLAY_DEPTH = 3000;
   const DEBUG_OVERLAY_DEPTH = 5000;
   const RENDER_RESOLUTION = Math.min(Number(global.devicePixelRatio) || 1, 2);
-  const PLAYER_VISUAL_SIZE = Object.freeze({ width: 96, height: 120 });
+  const PLAYER_VISUAL_SIZE = Object.freeze({ width: 150, height: 140 });
   const PLAYER_COLLISION = Object.freeze({ width: 34, height: 20, offsetX: 0, offsetY: 0 });
   const PROMPT_HALF_SIZE = Object.freeze({ width: 82, height: 25 });
+  const RACK_ROW_START_X = 390;
+  const RACK_COLUMN_SPACING = 170;
+  const ACTIVE_VISUAL_PACK = "ops-front-v2";
+  const TARGET_VISUAL_PACK = "ops-front-v2";
+  const VISUAL_PACKS = Object.freeze({
+    "ops-sheet-v1": Object.freeze({
+      ready: true,
+      artDirection: "three-quarter-fallback",
+      styleSource: "assets/v1.1/source/data-center-ops-asset-sheet.png",
+      background: Object.freeze({
+        key: "room-shell-main",
+        type: "image",
+        path: "assets/v1.1/environment/room-shell-main.png"
+      }),
+      racks: Object.freeze({
+        normal: Object.freeze({ key: "rack-normal", type: "image", path: "assets/v1.1/racks/rack-normal-v2.png" }),
+        warning: Object.freeze({ key: "rack-warning", type: "image", path: "assets/v1.1/racks/rack-warning-v2.png" }),
+        critical: Object.freeze({ key: "rack-critical", type: "image", path: "assets/v1.1/racks/rack-critical-v2.png" })
+      }),
+      equipment: Object.freeze({
+        "ups-a": Object.freeze({ key: "ups-a", type: "image", path: "assets/v1.1/equipment/ups-v1.png" }),
+        "pdu-a": Object.freeze({ key: "pdu-a", type: "image", path: "assets/v1.1/equipment/pdu-v1.png" }),
+        "pdu-b": Object.freeze({ key: "pdu-b", type: "image", path: "assets/v1.1/equipment/pdu-v1.png" }),
+        "crac-a": Object.freeze({ key: "crac-a", type: "image", path: "assets/v1.1/equipment/crac-v1.png" })
+      }),
+      operator: Object.freeze({
+        basePath: "assets/v1.1/operators/operator-ops-v1",
+        type: "image",
+        extension: "png",
+        walkFrames: 2,
+        frameRate: 8,
+        displaySize: PLAYER_VISUAL_SIZE,
+        origin: Object.freeze({ x: 0.5, y: 0.9 })
+      }),
+      ui: Object.freeze({
+        warning: Object.freeze({ key: "warning-diamond", type: "svg", path: "assets/ui/warning-diamond.svg", loadSize: Object.freeze({ width: 80, height: 80 }) })
+      })
+    }),
+    "ops-front-v2": Object.freeze({
+      ready: true,
+      artDirection: "front-facing",
+      styleSource: Object.freeze([
+        "assets/v1.1/source/ops-front-v2-equipment-sheet.png",
+        "assets/v1.1/source/ops-front-v2-operator-sheet.png"
+      ]),
+      background: Object.freeze({
+        key: "room-shell-main",
+        type: "image",
+        path: "assets/v1.1/environment/room-shell-main.png"
+      }),
+      racks: Object.freeze({
+        normal: Object.freeze({ key: "rack-normal", type: "image", path: "assets/v1.1/ops-front-v2/racks/rack-normal.png" }),
+        warning: Object.freeze({ key: "rack-warning", type: "image", path: "assets/v1.1/ops-front-v2/racks/rack-warning.png" }),
+        critical: Object.freeze({ key: "rack-critical", type: "image", path: "assets/v1.1/ops-front-v2/racks/rack-critical.png" })
+      }),
+      equipment: Object.freeze({
+        "ups-a": Object.freeze({ key: "ups-a", type: "image", path: "assets/v1.1/ops-front-v2/equipment/ups.png" }),
+        "pdu-a": Object.freeze({ key: "pdu-a", type: "image", path: "assets/v1.1/ops-front-v2/equipment/pdu-a.png" }),
+        "pdu-b": Object.freeze({ key: "pdu-b", type: "image", path: "assets/v1.1/ops-front-v2/equipment/pdu-b.png" }),
+        "crac-a": Object.freeze({ key: "crac-a", type: "image", path: "assets/v1.1/ops-front-v2/equipment/crac.png" })
+      }),
+      operator: Object.freeze({
+        basePath: "assets/v1.1/ops-front-v2/operators/operator-a",
+        type: "image",
+        extension: "png",
+        walkFrames: 4,
+        frameRate: 10,
+        displaySize: Object.freeze({ width: 96, height: 120 }),
+        origin: Object.freeze({ x: 0.5, y: 0.92 })
+      }),
+      profiles: Object.freeze({
+        rack: Object.freeze({
+          width: 112,
+          height: 180,
+          origin: Object.freeze({ x: 0.5, y: 0.92 }),
+          footOffsetRatio: 0,
+          prompt: Object.freeze({ x: 0, y: -172 }),
+          warning: Object.freeze({ x: 46, y: -146 }),
+          shadow: Object.freeze({ width: 102, height: 16, offsetX: 0, offsetY: 2, alpha: 0.26 })
+        }),
+        "ups-a": Object.freeze({
+          width: 111,
+          height: 180,
+          origin: Object.freeze({ x: 0.5, y: 0.92 }),
+          footOffsetRatio: 0,
+          prompt: Object.freeze({ x: 0, y: -172 }),
+          shadow: Object.freeze({ width: 108, height: 18, offsetX: 0, offsetY: 2, alpha: 0.28 })
+        }),
+        "pdu-a": Object.freeze({
+          width: 79,
+          height: 160,
+          origin: Object.freeze({ x: 0.5, y: 0.92 }),
+          footOffsetRatio: 0,
+          prompt: Object.freeze({ x: 0, y: -152 }),
+          shadow: Object.freeze({ width: 82, height: 16, offsetX: 0, offsetY: 2, alpha: 0.26 })
+        }),
+        "pdu-b": Object.freeze({
+          width: 79,
+          height: 160,
+          origin: Object.freeze({ x: 0.5, y: 0.92 }),
+          footOffsetRatio: 0,
+          prompt: Object.freeze({ x: 0, y: -152 }),
+          shadow: Object.freeze({ width: 82, height: 16, offsetX: 0, offsetY: 2, alpha: 0.26 })
+        }),
+        "crac-a": Object.freeze({
+          width: 217,
+          height: 220,
+          origin: Object.freeze({ x: 0.5, y: 0.92 }),
+          footOffsetRatio: 0,
+          prompt: Object.freeze({ x: 0, y: -210 }),
+          shadow: Object.freeze({ width: 128, height: 20, offsetX: 0, offsetY: 2, alpha: 0.3 })
+        })
+      }),
+      ui: Object.freeze({
+        warning: Object.freeze({ key: "warning-diamond", type: "svg", path: "assets/ui/warning-diamond.svg", loadSize: Object.freeze({ width: 80, height: 80 }) })
+      })
+    })
+  });
   const ASSET_PROFILES = Object.freeze({
     rack: Object.freeze({
-      width: 118,
-      height: 180,
+      width: 154,
+      height: 218,
       origin: Object.freeze({ x: 0.5, y: 0.68 }),
       collision: Object.freeze({ width: 96, height: 40, offsetX: 0, offsetY: -4 }),
       interaction: Object.freeze({ width: 170, height: 170, offsetX: 0, offsetY: -15 }),
-      prompt: Object.freeze({ x: 0, y: -145 })
+      prompt: Object.freeze({ x: 0, y: -145 }),
+      warning: Object.freeze({ x: 60, y: -98 }),
+      shadow: Object.freeze({ width: 122, height: 18, offsetX: 0, offsetY: 2, alpha: 0.28 })
     }),
     "ups-a": Object.freeze({
-      width: 140,
-      height: 180,
+      width: 170,
+      height: 210,
       origin: Object.freeze({ x: 0.5, y: 0.68 }),
       collision: Object.freeze({ width: 108, height: 42, offsetX: 0, offsetY: -4 }),
       interaction: Object.freeze({ width: 190, height: 175, offsetX: 0, offsetY: -28 }),
-      prompt: Object.freeze({ x: 0, y: -130 })
+      prompt: Object.freeze({ x: 0, y: -130 }),
+      shadow: Object.freeze({ width: 112, height: 20, offsetX: 0, offsetY: 2, alpha: 0.3 })
     }),
     "pdu-a": Object.freeze({
-      width: 110,
-      height: 160,
+      width: 144,
+      height: 198,
       origin: Object.freeze({ x: 0.5, y: 0.68 }),
       collision: Object.freeze({ width: 86, height: 40, offsetX: 0, offsetY: -4 }),
       interaction: Object.freeze({ width: 160, height: 155, offsetX: 0, offsetY: -24 }),
-      prompt: Object.freeze({ x: 0, y: -122 })
+      prompt: Object.freeze({ x: 0, y: -122 }),
+      shadow: Object.freeze({ width: 74, height: 18, offsetX: 0, offsetY: 2, alpha: 0.28 })
     }),
     "pdu-b": Object.freeze({
-      width: 110,
-      height: 160,
+      width: 144,
+      height: 198,
       origin: Object.freeze({ x: 0.5, y: 0.68 }),
       collision: Object.freeze({ width: 86, height: 40, offsetX: 0, offsetY: -4 }),
       interaction: Object.freeze({ width: 160, height: 155, offsetX: 0, offsetY: -24 }),
-      prompt: Object.freeze({ x: 0, y: -122 })
+      prompt: Object.freeze({ x: 0, y: -122 }),
+      shadow: Object.freeze({ width: 74, height: 18, offsetX: 0, offsetY: 2, alpha: 0.28 })
     }),
     "crac-a": Object.freeze({
-      width: 150,
-      height: 220,
+      width: 202,
+      height: 202,
       origin: Object.freeze({ x: 0.5, y: 0.68 }),
       collision: Object.freeze({ width: 120, height: 52, offsetX: 0, offsetY: -4 }),
       interaction: Object.freeze({ width: 210, height: 205, offsetX: 0, offsetY: -34 }),
-      prompt: Object.freeze({ x: 0, y: -158 })
+      prompt: Object.freeze({ x: 0, y: -146 }),
+      shadow: Object.freeze({ width: 164, height: 22, offsetX: 0, offsetY: 2, alpha: 0.32 })
     })
   });
   const DIRECTIONS = Object.freeze(["north", "south", "west", "east"]);
@@ -76,8 +200,10 @@
   const OPERATOR_TEXTURES = Object.freeze(
     DIRECTIONS.flatMap((direction) => [
       `operator-idle-${direction}`,
-      `operator-walk-${direction}-1`,
-      `operator-walk-${direction}-2`
+      ...Array.from(
+        { length: VISUAL_PACKS[ACTIVE_VISUAL_PACK].operator.walkFrames },
+        (_, index) => `operator-walk-${direction}-${index + 1}`
+      )
     ])
   );
 
@@ -132,32 +258,84 @@
       && Math.abs(Number(point.y) - zone.y) <= zone.height / 2;
   }
 
-  function buildSceneLayout(assets = []) {
+  function getVisualPack(packName = ACTIVE_VISUAL_PACK) {
+    const visualPack = VISUAL_PACKS[packName];
+    if (!visualPack) throw new RangeError(`Unknown Phaser visual pack: ${packName}`);
+    return visualPack;
+  }
+
+  function getOperatorWalkFrames(packName = ACTIVE_VISUAL_PACK) {
+    const frameCount = Math.max(1, Math.trunc(Number(getVisualPack(packName).operator.walkFrames) || 1));
+    return Object.freeze(Array.from({ length: frameCount }, (_, index) => index + 1));
+  }
+
+  function getOperatorTextureKeys(packName = ACTIVE_VISUAL_PACK) {
+    const walkFrames = getOperatorWalkFrames(packName);
+    return Object.freeze(DIRECTIONS.flatMap((direction) => [
+      `operator-idle-${direction}`,
+      ...walkFrames.map((frame) => `operator-walk-${direction}-${frame}`)
+    ]));
+  }
+
+  function getOperatorDisplay(packName = ACTIVE_VISUAL_PACK) {
+    const operator = getVisualPack(packName).operator;
+    return Object.freeze({
+      size: operator.displaySize || PLAYER_VISUAL_SIZE,
+      origin: operator.origin || Object.freeze({ x: 0.5, y: 0.9 })
+    });
+  }
+
+  function getRackTextureKey(rack = {}, packName = ACTIVE_VISUAL_PACK) {
+    const racks = getVisualPack(packName).racks;
+    if (rack.incident) return racks.critical.key;
+    const rackState = Object.hasOwn(racks, rack.state) ? rack.state : "normal";
+    return racks[rackState].key;
+  }
+
+  function getEquipmentTextureKey(asset = {}, packName = ACTIVE_VISUAL_PACK) {
+    return getVisualPack(packName).equipment[asset.id]?.key || null;
+  }
+
+  function getAssetProfile(asset, packName = ACTIVE_VISUAL_PACK) {
+    const baseProfile = ASSET_PROFILES[asset.id] || ASSET_PROFILES[asset.type] || ASSET_PROFILES.rack;
+    const packProfiles = getVisualPack(packName).profiles;
+    const visualProfile = packProfiles?.[asset.id] || packProfiles?.[asset.type];
+    if (!visualProfile) return baseProfile;
+    return Object.freeze({
+      ...baseProfile,
+      ...visualProfile,
+      collision: baseProfile.collision,
+      interaction: baseProfile.interaction
+    });
+  }
+
+  function buildSceneLayout(assets = [], packName = ACTIVE_VISUAL_PACK) {
     return assets.map((asset) => {
       const fallback = gridToWorld(asset);
       let x = fallback.x;
       let y = fallback.y;
-      const profile = ASSET_PROFILES[asset.id] || ASSET_PROFILES[asset.type] || ASSET_PROFILES.rack;
-      let displayWidth = profile.width;
-      let displayHeight = profile.height;
-      let footY = y + displayHeight * 0.34;
+      const profile = getAssetProfile(asset, packName);
+      const displayWidth = profile.width;
+      const displayHeight = profile.height;
+      const footOffsetRatio = Number.isFinite(profile.footOffsetRatio) ? profile.footOffsetRatio : 0.34;
+      let footY = y + displayHeight * footOffsetRatio;
 
       if (asset.type === "rack") {
-        x = 450 + ((asset.rackId - 1) % 5) * 135;
+        x = RACK_ROW_START_X + ((asset.rackId - 1) % 5) * RACK_COLUMN_SPACING;
         footY = asset.rackId <= 5 ? 300.84 : 526;
-        y = footY - displayHeight * 0.34;
+        y = footY - displayHeight * footOffsetRatio;
       } else if (asset.id === "ups-a") {
         x = 174; footY = 257.44;
-        y = footY - displayHeight * 0.34;
+        y = footY - displayHeight * footOffsetRatio;
       } else if (asset.id === "pdu-a") {
         x = 174; footY = 383.36;
-        y = footY - displayHeight * 0.34;
+        y = footY - displayHeight * footOffsetRatio;
       } else if (asset.id === "pdu-b") {
         x = 174; footY = 509.36;
-        y = footY - displayHeight * 0.34;
+        y = footY - displayHeight * footOffsetRatio;
       } else if (asset.id === "crac-a") {
         x = 1260; footY = 403.68;
-        y = footY - displayHeight * 0.34;
+        y = footY - displayHeight * footOffsetRatio;
       }
 
       const collision = Object.freeze({
@@ -187,9 +365,10 @@
           y: y + profile.prompt.y
         }),
         warningAnchor: Object.freeze({
-          x: x + displayWidth * 0.43,
-          y: y - displayHeight * 0.43
-        })
+          x: x + (profile.warning?.x ?? displayWidth * 0.43),
+          y: y + (profile.warning?.y ?? -displayHeight * 0.43)
+        }),
+        shadow: profile.shadow
       });
     });
   }
@@ -246,24 +425,39 @@
       scene.load.svg(key, path, svgConfig);
     }
 
+    function loadVisualAsset(scene, definition) {
+      if (definition.type === "image") {
+        scene.load.image(definition.key, definition.path);
+        return;
+      }
+      loadSvg(scene, definition.key, definition.path, definition.loadSize);
+    }
+
     function preload() {
+      const visualPack = getVisualPack();
       this.load.once("loaderror", (file) => {
         state.loadFailed = true;
         state.loadFailureKey = file?.key || "unknown";
       });
-      this.load.image("room-shell-main", "assets/v1.1/environment/room-shell-main.png");
-      ["normal", "warning", "critical"].forEach((rackState) => {
-        loadSvg(this, `rack-${rackState}`, `assets/equipment/rack-${rackState}.svg`, { width: 236, height: 360 });
-      });
-      loadSvg(this, "ups", "assets/equipment/ups.svg", { width: 280, height: 360 });
-      loadSvg(this, "pdu", "assets/equipment/pdu.svg", { width: 220, height: 320 });
-      loadSvg(this, "crac", "assets/equipment/crac.svg", { width: 300, height: 440 });
-      loadSvg(this, "warning-diamond", "assets/ui/warning-diamond.svg", { width: 80, height: 80 });
+      loadVisualAsset(this, visualPack.background);
+      Object.values(visualPack.racks).forEach((definition) => loadVisualAsset(this, definition));
+      Object.values(visualPack.equipment).forEach((definition) => loadVisualAsset(this, definition));
+      loadVisualAsset(this, visualPack.ui.warning);
       DIRECTIONS.forEach((direction) => {
         const fileDirection = DIRECTION_FILE_NAMES[direction];
-        loadSvg(this, `operator-idle-${direction}`, `assets/operators/operator-a/idle-${fileDirection}.svg`, { width: 128, height: 160 });
-        [1, 2].forEach((frame) => {
-          loadSvg(this, `operator-walk-${direction}-${frame}`, `assets/operators/operator-a/walk-${fileDirection}-${frame}.svg`, { width: 128, height: 160 });
+        loadVisualAsset(this, {
+          key: `operator-idle-${direction}`,
+          type: visualPack.operator.type,
+          path: `${visualPack.operator.basePath}/idle-${fileDirection}.${visualPack.operator.extension}`,
+          loadSize: visualPack.operator.loadSize
+        });
+        getOperatorWalkFrames().forEach((frame) => {
+          loadVisualAsset(this, {
+            key: `operator-walk-${direction}-${frame}`,
+            type: visualPack.operator.type,
+            path: `${visualPack.operator.basePath}/walk-${fileDirection}-${frame}.${visualPack.operator.extension}`,
+            loadSize: visualPack.operator.loadSize
+          });
         });
       });
     }
@@ -305,29 +499,47 @@
     }
 
     function addRoom(scene) {
-      scene.add.image(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, "room-shell-main")
+      scene.add.image(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, getVisualPack().background.key)
         .setOrigin(0.5)
         .setDisplaySize(WORLD_WIDTH, WORLD_HEIGHT)
         .setDepth(-100);
     }
 
     function createAnimations(scene) {
+      const visualPack = getVisualPack();
       DIRECTIONS.forEach((direction) => {
         scene.anims.create({
           key: `operator-walk-${direction}`,
-          frames: [1, 2].map((frame) => ({ key: `operator-walk-${direction}-${frame}` })),
-          frameRate: 8,
+          frames: getOperatorWalkFrames().map((frame) => ({ key: `operator-walk-${direction}-${frame}` })),
+          frameRate: visualPack.operator.frameRate,
           repeat: -1
         });
       });
     }
 
-    function facilityTexture(asset) {
-      return String(asset.facilityType || "").toLowerCase();
+    function addContactShadow(scene, asset) {
+      const shadow = asset.shadow;
+      if (!shadow) return null;
+      return scene.add.ellipse(
+        asset.x + shadow.offsetX,
+        asset.footY + shadow.offsetY,
+        shadow.width,
+        shadow.height,
+        0x010509,
+        shadow.alpha
+      ).setDepth(depthFromFootY(asset.depthPivotY, -3));
+    }
+
+    function addSceneGrade(scene) {
+      const grade = scene.add.rectangle(WORLD_WIDTH / 2, WORLD_HEIGHT / 2, WORLD_WIDTH, WORLD_HEIGHT, 0x102631, 0.025)
+        .setDepth(DEPTH_BASE + WORLD_HEIGHT + 100);
+      if (Phaser.BlendModes?.MULTIPLY !== undefined) grade.setBlendMode(Phaser.BlendModes.MULTIPLY);
+      state.sceneGrade = grade;
     }
 
     function addAsset(scene, asset, colliders) {
-      const texture = asset.type === "rack" ? "rack-normal" : facilityTexture(asset);
+      const texture = asset.type === "rack" ? getRackTextureKey() : getEquipmentTextureKey(asset);
+      const shadow = addContactShadow(scene, asset);
       const visual = scene.add.image(asset.x, asset.y, texture)
         .setDisplaySize(asset.displayWidth, asset.displayHeight)
         .setOrigin(asset.origin.x, asset.origin.y)
@@ -348,7 +560,7 @@
       const footprint = addStaticFootprint(scene, colliders, asset);
       addDebugZone(scene, asset.collision, 0xff4fa3, `${asset.label} BODY`);
       addDebugZone(scene, asset.interactionZone, 0x39e7ff, `${asset.label} INTERACT`);
-      state.assetViews.set(asset.id, { visual, label, warning, footprint, asset });
+      state.assetViews.set(asset.id, { visual, label, warning, shadow, footprint, asset });
     }
 
     function addInteractionPrompt(scene) {
@@ -374,6 +586,7 @@
     }
 
     function createPlayer(scene) {
+      const operatorDisplay = getOperatorDisplay();
       const initial = options.initialPlayer?.worldX && options.initialPlayer?.worldY
         ? { x: options.initialPlayer.worldX, y: options.initialPlayer.worldY }
         : gridToWorld(options.initialPlayer || { x: 6, y: 7 });
@@ -396,8 +609,8 @@
         .setCollideWorldBounds(true);
       player.body.setSize(PLAYER_COLLISION.width, PLAYER_COLLISION.height, true);
       state.playerVisual = scene.add.sprite(initial.x, initial.y, "operator-idle-north")
-        .setOrigin(0.5, 0.9)
-        .setDisplaySize(PLAYER_VISUAL_SIZE.width, PLAYER_VISUAL_SIZE.height)
+        .setOrigin(operatorDisplay.origin.x, operatorDisplay.origin.y)
+        .setDisplaySize(operatorDisplay.size.width, operatorDisplay.size.height)
         .setDepth(depthFromFootY(getPlayerFootPosition(initial).y));
       if (state.debugEnabled) {
         state.playerDebugBody = addDebugZone(scene, {
@@ -432,9 +645,11 @@
       state.assetViews.forEach((view) => {
         if (view.asset.type !== "rack") return;
         const rack = rackStateFor(view.asset.rackId);
-        const rackState = ["warning", "critical"].includes(rack.state) ? rack.state : "normal";
-        view.visual.setTexture(`rack-${rackState}`).setDisplaySize(view.asset.displayWidth, view.asset.displayHeight);
         const incident = Boolean(rack.incident || state.activeIncidentRackId === view.asset.rackId);
+        view.visual.setTexture(getRackTextureKey({ ...rack, incident }))
+          .setDisplaySize(view.asset.displayWidth, view.asset.displayHeight)
+          .setOrigin(view.asset.origin.x, view.asset.origin.y)
+          .setPosition(view.asset.x, view.asset.y);
         view.warning.setVisible(incident);
         view.label.setColor(incident ? "#ff6f75" : rack.selected ? "#72f4ff" : "#d5fbff");
       });
@@ -504,6 +719,7 @@
       }
       state.scene = this;
       parent.dataset.debugFloor = state.debugEnabled ? "true" : "false";
+      parent.dataset.visualPack = ACTIVE_VISUAL_PACK;
       this.cameras.main.setBackgroundColor("#02070c");
       this.physics.world.setBounds(82, 104, WORLD_WIDTH - 164, WORLD_HEIGHT - 146);
       addRoom(this);
@@ -518,6 +734,7 @@
 
       const player = createPlayer(this);
       this.physics.add.collider(player, colliders);
+      addSceneGrade(this);
       addInteractionPrompt(this);
       this.cursors = this.input.keyboard.addKeys({
         up: Phaser.Input.Keyboard.KeyCodes.UP,
@@ -553,10 +770,12 @@
 
     function stopPlayer() {
       if (!state.player) return;
+      const operatorDisplay = getOperatorDisplay();
       state.player.setVelocity(0, 0);
       state.playerVisual?.anims.stop();
       state.playerVisual?.setTexture(`operator-idle-${state.facing}`)
-        .setDisplaySize(PLAYER_VISUAL_SIZE.width, PLAYER_VISUAL_SIZE.height);
+        .setDisplaySize(operatorDisplay.size.width, operatorDisplay.size.height)
+        .setOrigin(operatorDisplay.origin.x, operatorDisplay.origin.y);
     }
 
     function updateScene() {
@@ -692,7 +911,8 @@
             ? Object.freeze({ x: state.player.body.velocity.x, y: state.player.body.velocity.y })
             : null,
           speed: PLAYER_SPEED,
-          textureCount: OPERATOR_TEXTURES.length,
+          visualPack: ACTIVE_VISUAL_PACK,
+          textureCount: getOperatorTextureKeys().length,
           debugEnabled: state.debugEnabled,
           playerFoot: state.player ? getPlayerFootPosition(state.player) : null,
           playerBody: state.player?.body
@@ -719,6 +939,11 @@
     DEPTH_BASE,
     RENDER_RESOLUTION,
     PLAYER_COLLISION,
+    RACK_ROW_START_X,
+    RACK_COLUMN_SPACING,
+    ACTIVE_VISUAL_PACK,
+    TARGET_VISUAL_PACK,
+    VISUAL_PACKS,
     ASSET_PROFILES,
     OPERATOR_TEXTURES,
     getMovementIntent,
@@ -728,6 +953,13 @@
     depthFromFootY,
     getPlayerFootPosition,
     isPointInInteractionZone,
+    getVisualPack,
+    getOperatorWalkFrames,
+    getOperatorTextureKeys,
+    getOperatorDisplay,
+    getAssetProfile,
+    getRackTextureKey,
+    getEquipmentTextureKey,
     buildSceneLayout,
     create
   });

@@ -24,6 +24,17 @@ function loadCatalog() {
   return context.window.DCOpsData;
 }
 
+function readPngHeader(filePath) {
+  const buffer = fs.readFileSync(filePath);
+  assert.equal(buffer.subarray(0, 8).toString("hex"), "89504e470d0a1a0a");
+  assert.equal(buffer.subarray(12, 16).toString("ascii"), "IHDR");
+  return {
+    width: buffer.readUInt32BE(16),
+    height: buffer.readUInt32BE(20),
+    colorType: buffer[25]
+  };
+}
+
 const data = loadCatalog();
 const rank = { EASY: 1, NORMAL: 2, HARD: 3 };
 const pool = (difficulty) => data.incidents.filter((incident) => rank[incident.minDifficulty] <= rank[difficulty]);
@@ -312,18 +323,35 @@ test("Phaser Floor movement intent is continuous but never diagonal", () => {
   );
 });
 
-test("Phaser Floor defines all 12 operator animation textures", () => {
-  assert.equal(PhaserFloor.OPERATOR_TEXTURES.length, 12);
-  assert.equal(new Set(PhaserFloor.OPERATOR_TEXTURES).size, 12);
+test("Phaser Floor activates the 4-frame operator mapping", () => {
+  assert.equal(PhaserFloor.OPERATOR_TEXTURES.length, 20);
+  assert.equal(new Set(PhaserFloor.OPERATOR_TEXTURES).size, 20);
+  assert.deepEqual(PhaserFloor.getOperatorWalkFrames(), [1, 2, 3, 4]);
+  assert.deepEqual(PhaserFloor.getOperatorTextureKeys(), PhaserFloor.OPERATOR_TEXTURES);
 });
 
 test("Phaser Floor layout preserves every Rack and facility", () => {
   const layout = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS);
   assert.equal(layout.length, Floor.FLOOR_ASSETS.length);
   assert.equal(layout.filter((asset) => asset.type === "rack").length, 10);
-  assert.equal(layout.every((asset) => asset.collision.width < asset.displayWidth), true);
+  assert.equal(layout.every((asset) => asset.collision.width > 0 && asset.collision.height > 0), true);
   assert.equal(layout.every((asset) => asset.interactionZone.width > asset.collision.width), true);
   assert.equal(layout.every((asset) => asset.depthPivotY === asset.footY), true);
+});
+
+test("Scene-first Rack spacing leaves a traversable aisle between cabinets", () => {
+  const firstRow = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS)
+    .filter((asset) => asset.type === "rack" && asset.rackId <= 5)
+    .sort((a, b) => a.x - b.x);
+  const centerGaps = firstRow.slice(1).map((rack, index) => rack.x - firstRow[index].x);
+  const visibleGaps = firstRow.slice(1).map((rack, index) => rack.x - firstRow[index].x - rack.displayWidth);
+  const collisionGaps = firstRow.slice(1).map((rack, index) => (
+    rack.collision.x - rack.collision.width / 2
+    - (firstRow[index].collision.x + firstRow[index].collision.width / 2)
+  ));
+  assert.deepEqual(centerGaps, [170, 170, 170, 170]);
+  assert.deepEqual(visibleGaps, [58, 58, 58, 58]);
+  assert.equal(collisionGaps.every((gap) => gap > PhaserFloor.PLAYER_COLLISION.width), true);
 });
 
 test("Phaser Floor collision metadata follows each asset base", () => {
@@ -332,8 +360,6 @@ test("Phaser Floor collision metadata follows each asset base", () => {
   const ups = layout.find((asset) => asset.id === "ups-a");
   const pdu = layout.find((asset) => asset.id === "pdu-a");
   const crac = layout.find((asset) => asset.id === "crac-a");
-  assert.equal(rack.collision.width / rack.displayWidth > 0.7, true);
-  assert.equal(rack.collision.width / rack.displayWidth < 0.85, true);
   assert.deepEqual(
     [rack.collision.width, rack.collision.height, ups.collision.width, pdu.collision.width, crac.collision.width],
     [96, 40, 108, 86, 120]
@@ -353,11 +379,163 @@ test("Phaser Floor depth and player body use floor contact metadata", () => {
   assert.equal(PhaserFloor.depthFromFootY(420) > PhaserFloor.depthFromFootY(300), true);
 });
 
+test("Phaser Floor keeps the previous 3/4 pack as a complete fallback", () => {
+  const pack = PhaserFloor.getVisualPack("ops-sheet-v1");
+  assert.equal(pack.ready, true);
+  assert.equal(pack.artDirection, "three-quarter-fallback");
+  assert.equal(pack.styleSource, "assets/v1.1/source/data-center-ops-asset-sheet.png");
+  assert.deepEqual(Object.fromEntries(Object.entries(pack.racks).map(([state, asset]) => [state, asset.path])), {
+    normal: "assets/v1.1/racks/rack-normal-v2.png",
+    warning: "assets/v1.1/racks/rack-warning-v2.png",
+    critical: "assets/v1.1/racks/rack-critical-v2.png"
+  });
+  assert.equal(Object.values(pack.racks).every((asset) => asset.type === "image"), true);
+  assert.equal(Object.values(pack.equipment).every((asset) => asset.type === "image"), true);
+  assert.equal(pack.operator.basePath, "assets/v1.1/operators/operator-ops-v1");
+  assert.equal(pack.operator.extension, "png");
+  assert.equal(pack.operator.walkFrames, 2);
+  const projectRoot = path.join(__dirname, "..");
+  const packFiles = [
+    ...Object.values(pack.racks).map((asset) => asset.path),
+    ...new Set(Object.values(pack.equipment).map((asset) => asset.path)),
+    ...["down", "left", "up", "right"].flatMap((direction) => [
+      `${pack.operator.basePath}/idle-${direction}.png`,
+      `${pack.operator.basePath}/walk-${direction}-1.png`,
+      `${pack.operator.basePath}/walk-${direction}-2.png`
+    ])
+  ];
+  assert.equal(packFiles.every((file) => fs.existsSync(path.join(projectRoot, file))), true);
+  assert.deepEqual(
+    ["ups-a", "pdu-a", "pdu-b", "crac-a"].map((id) => PhaserFloor.getEquipmentTextureKey({ id }, "ops-sheet-v1")),
+    ["ups-a", "pdu-a", "pdu-b", "crac-a"]
+  );
+  const racks = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS, "ops-sheet-v1").filter((asset) => asset.type === "rack");
+  assert.equal(racks.every((rack) => rack.displayWidth === 154 && rack.displayHeight === 218), true);
+  assert.equal(racks.every((rack) => rack.collision.width === 96 && rack.collision.height === 40), true);
+  assert.equal(racks.every((rack) => rack.shadow.width === 122 && rack.warningAnchor.x === rack.x + 60), true);
+});
+
+test("Phaser Floor activates all 27 front-facing v2 PNG assets", () => {
+  assert.equal(PhaserFloor.ACTIVE_VISUAL_PACK, "ops-front-v2");
+  assert.equal(PhaserFloor.TARGET_VISUAL_PACK, "ops-front-v2");
+  const pack = PhaserFloor.getVisualPack(PhaserFloor.TARGET_VISUAL_PACK);
+  assert.equal(pack.ready, true);
+  assert.equal(pack.artDirection, "front-facing");
+  assert.deepEqual(pack.styleSource, [
+    "assets/v1.1/source/ops-front-v2-equipment-sheet.png",
+    "assets/v1.1/source/ops-front-v2-operator-sheet.png"
+  ]);
+  assert.deepEqual(Object.fromEntries(Object.entries(pack.racks).map(([state, asset]) => [state, asset.path])), {
+    normal: "assets/v1.1/ops-front-v2/racks/rack-normal.png",
+    warning: "assets/v1.1/ops-front-v2/racks/rack-warning.png",
+    critical: "assets/v1.1/ops-front-v2/racks/rack-critical.png"
+  });
+  assert.deepEqual(Object.fromEntries(Object.entries(pack.equipment).map(([id, asset]) => [id, asset.path])), {
+    "ups-a": "assets/v1.1/ops-front-v2/equipment/ups.png",
+    "pdu-a": "assets/v1.1/ops-front-v2/equipment/pdu-a.png",
+    "pdu-b": "assets/v1.1/ops-front-v2/equipment/pdu-b.png",
+    "crac-a": "assets/v1.1/ops-front-v2/equipment/crac.png"
+  });
+  assert.equal(pack.operator.basePath, "assets/v1.1/ops-front-v2/operators/operator-a");
+  assert.equal(pack.operator.walkFrames, 4);
+  assert.deepEqual(PhaserFloor.getOperatorWalkFrames(PhaserFloor.TARGET_VISUAL_PACK), [1, 2, 3, 4]);
+  assert.equal(PhaserFloor.getOperatorTextureKeys(PhaserFloor.TARGET_VISUAL_PACK).length, 20);
+  assert.equal(new Set(PhaserFloor.getOperatorTextureKeys(PhaserFloor.TARGET_VISUAL_PACK)).size, 20);
+
+  const projectRoot = path.join(__dirname, "..");
+  const rackFiles = Object.values(pack.racks).map((asset) => asset.path);
+  const equipmentFiles = Object.values(pack.equipment).map((asset) => asset.path);
+  const operatorFiles = ["down", "up", "left", "right"].flatMap((direction) => [
+    `${pack.operator.basePath}/idle-${direction}.png`,
+    ...[1, 2, 3, 4].map((frame) => `${pack.operator.basePath}/walk-${direction}-${frame}.png`)
+  ]);
+  const assetFiles = [...rackFiles, ...equipmentFiles, ...operatorFiles];
+  assert.equal(assetFiles.length, 27);
+  assert.equal(assetFiles.every((file) => fs.existsSync(path.join(projectRoot, file))), true);
+
+  const rackHeaders = rackFiles.map((file) => readPngHeader(path.join(projectRoot, file)));
+  const operatorHeaders = operatorFiles.map((file) => readPngHeader(path.join(projectRoot, file)));
+  assert.equal(rackHeaders.every((header) => header.width === 336 && header.height === 540 && header.colorType === 6), true);
+  assert.equal(operatorHeaders.every((header) => header.width === 320 && header.height === 400 && header.colorType === 6), true);
+  assert.deepEqual(
+    equipmentFiles.map((file) => readPngHeader(path.join(projectRoot, file))).map(({ width, height, colorType }) => [width, height, colorType]),
+    [[320, 520, 6], [256, 520, 6], [256, 520, 6], [512, 520, 6]]
+  );
+
+  assert.deepEqual(
+    ["ups-a", "pdu-a", "pdu-b", "crac-a"].map((id) => PhaserFloor.getEquipmentTextureKey({ id })),
+    ["ups-a", "pdu-a", "pdu-b", "crac-a"]
+  );
+  assert.equal(PhaserFloor.getRackTextureKey({ state: "normal" }), "rack-normal");
+  assert.equal(PhaserFloor.getRackTextureKey({ state: "warning" }), "rack-warning");
+  assert.equal(PhaserFloor.getRackTextureKey({ state: "critical" }), "rack-critical");
+  assert.equal(PhaserFloor.getRackTextureKey({ state: "warning", incident: true }), "rack-critical");
+});
+
+test("Front-facing visual metadata preserves gameplay footprints and floor depth", () => {
+  const current = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS, "ops-sheet-v1");
+  const front = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS, PhaserFloor.TARGET_VISUAL_PACK);
+  const currentById = new Map(current.map((asset) => [asset.id, asset]));
+
+  front.forEach((asset) => {
+    const currentAsset = currentById.get(asset.id);
+    assert.equal(asset.x, currentAsset.x);
+    assert.equal(asset.footY, currentAsset.footY);
+    assert.equal(asset.depthPivotY, currentAsset.depthPivotY);
+    assert.deepEqual(asset.collision, currentAsset.collision);
+    assert.deepEqual(asset.interactionZone, currentAsset.interactionZone);
+  });
+
+  const racks = front.filter((asset) => asset.type === "rack");
+  assert.equal(racks.length, 10);
+  assert.equal(racks.every((rack) => rack.displayWidth === 112 && rack.displayHeight === 180), true);
+  assert.equal(racks.every((rack) => rack.origin.x === 0.5 && rack.origin.y === 0.92), true);
+  assert.equal(racks.every((rack) => rack.y === rack.footY), true);
+  assert.deepEqual(
+    ["ups-a", "pdu-a", "pdu-b", "crac-a"].map((id) => {
+      const asset = front.find((item) => item.id === id);
+      return [asset.displayWidth, asset.displayHeight];
+    }),
+    [[111, 180], [79, 160], [79, 160], [217, 220]]
+  );
+  assert.deepEqual(PhaserFloor.getOperatorDisplay(PhaserFloor.TARGET_VISUAL_PACK), {
+    size: { width: 96, height: 120 },
+    origin: { x: 0.5, y: 0.92 }
+  });
+});
+
 test("Phaser Floor mini map position follows continuous world coordinates", () => {
   assert.deepEqual(
     PhaserFloor.worldToMiniMap({ x: PhaserFloor.WORLD_WIDTH / 2, y: PhaserFloor.WORLD_HEIGHT / 4 }),
     { xPercent: 50, yPercent: 25 }
   );
+});
+
+test("Scene-first HUD uses exclusive in-scene popups without persistent dashboard panels", () => {
+  const projectRoot = path.join(__dirname, "..");
+  const html = fs.readFileSync(path.join(projectRoot, "index.html"), "utf8");
+  const appSource = fs.readFileSync(path.join(projectRoot, "app.js"), "utf8");
+  assert.match(html, /id="floorTerminalPopup"[\s\S]*id="terminalInput"/);
+  assert.match(html, /id="floorObjectivesPopup"[\s\S]*id="floorObjectives"/);
+  assert.match(html, /id="floorIncidentOpenBtn"[\s\S]*id="floorIncidentPopup"/);
+  assert.match(html, /id="floorIncidentPopup"[\s\S]*id="floorIncidentHint"/);
+  assert.doesNotMatch(html, /<aside class="floor-briefing"/);
+  assert.doesNotMatch(html, /class="floor-status-strip"/);
+  assert.doesNotMatch(html, /floor-bottom-hud|id="operatorCards"|id="floorMiniMap"|class="floor-controls"/);
+  assert.match(appSource, /let activeScenePopup = "none"/);
+  assert.match(appSource, /activeScenePopup === "none"/);
+  assert.match(appSource, /\["terminal", "objectives", "incident"\]\.includes\(nextPopup\)/);
+  assert.match(appSource, /setScenePopup\("terminal"\)/);
+});
+
+test("Terminal popup scrolls after layout and preserves manual history position during refresh", () => {
+  const projectRoot = path.join(__dirname, "..");
+  const appSource = fs.readFileSync(path.join(projectRoot, "app.js"), "utf8");
+  assert.match(appSource, /function scrollTerminalToLatest\(\)[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*requestAnimationFrame/);
+  assert.match(appSource, /function renderTerminal\(\{ scrollToBottom = false \} = \{\}\)/);
+  assert.match(appSource, /activeScenePopup === "terminal"[\s\S]*Math\.min\(previousScrollTop, elements\.terminalOutput\.scrollHeight\)/);
+  assert.match(appSource, /executeTerminalCommand[\s\S]*renderTerminal\(\{ scrollToBottom: true \}\)/);
+  assert.match(appSource, /popup === "terminal"[\s\S]*renderTerminal\(\{ scrollToBottom: true \}\)/);
 });
 
 process.stdout.write(`\n${checks} automated checks passed.\n`);

@@ -166,115 +166,87 @@
               </div>
             </div>
           </div>
-          <div class="floor-controls">
+          <div class="scene-hud-controls" aria-label="Floor Scene controls">
+            <button class="scene-hud-button scene-hud-button--incident" id="floorIncidentOpenBtn" type="button" aria-haspopup="dialog" aria-controls="floorIncidentPopup">
+              <span class="scene-hud-button__signal" aria-hidden="true"></span><span data-i18n="activeIncidentLabel">진행 중인 장애</span><strong id="floorIncidentButtonCount">0</strong>
+            </button>
+            <button class="scene-hud-button" id="floorObjectivesOpenBtn" type="button" aria-haspopup="dialog" aria-controls="floorObjectivesPopup">
+              <span aria-hidden="true">◎</span><span data-i18n="objectivesLabel">목표</span>
+            </button>
+          </div>
+          <div class="scene-control-hint">
             <span><kbd>↑ ↓ ← →</kbd> <span data-i18n="movementLabel">이동</span></span>
             <span><kbd>E</kbd> <span data-i18n="interactionLabel">상호작용</span></span>
             <strong id="floorInteractionStatus" aria-live="polite">랙 가까이로 이동하세요.</strong>
           </div>
+
+          <section class="scene-popup scene-popup--terminal" id="floorTerminalPopup" role="dialog" aria-modal="true" aria-labelledby="terminalTitle" hidden>
+            <div class="scene-popup__backdrop" data-scene-popup-close aria-hidden="true"></div>
+            <div class="scene-popup__panel terminal-panel">
+              <div class="terminal-header">
+                <div>
+                  <p class="eyebrow" data-i18n="safeEnvironmentLabel">안전한 Simulation 환경</p>
+                  <h2 id="terminalTitle"><span data-i18n="investigationTerminalLabel">조사 터미널</span> <span id="terminalRackLabel">NO RACK SELECTED</span></h2>
+                </div>
+                <div class="scene-popup__header-actions">
+                  <button class="terminal-clear-btn" id="terminalClearBtn" type="button" disabled>CLEAR</button>
+                  <button class="scene-popup__close" id="floorTerminalCloseBtn" type="button" aria-label="Close terminal">×</button>
+                </div>
+              </div>
+              <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
+              <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
+              <form class="terminal-command" id="terminalForm" autocomplete="off">
+                <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
+                <span class="terminal-prompt" id="terminalPrompt">operator@rack--:~$</span>
+                <input id="terminalInput" type="text" inputmode="text" spellcheck="false" autocapitalize="none" placeholder="Rack을 선택하세요" disabled>
+                <button class="terminal-run-btn" id="terminalRunBtn" type="submit" disabled>RUN</button>
+              </form>
+              <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
+              <div class="terminal-shortcuts" aria-hidden="true"><span><b>?</b> HELP</span><span><b>↑↓</b> HISTORY</span><span><b>ESC</b> CLOSE</span></div>
+            </div>
+          </section>
+
+          <section class="scene-popup scene-popup--objectives" id="floorObjectivesPopup" role="dialog" aria-modal="true" aria-labelledby="floorObjectivesTitle" hidden>
+            <div class="scene-popup__backdrop" data-scene-popup-close aria-hidden="true"></div>
+            <div class="scene-popup__panel floor-objectives">
+              <div class="scene-popup__heading">
+                <div><p class="eyebrow">MISSION OBJECTIVES</p><h4 id="floorObjectivesTitle" data-i18n="objectivesLabel">목표</h4></div>
+                <button class="scene-popup__close" id="floorObjectivesCloseBtn" type="button" aria-label="Close objectives">×</button>
+              </div>
+              <ol id="floorObjectives"></ol>
+            </div>
+          </section>
+
+          <section class="scene-popup scene-popup--incident" id="floorIncidentPopup" role="dialog" aria-modal="true" aria-labelledby="floorIncidentTitle" hidden>
+            <div class="scene-popup__backdrop" data-scene-popup-close aria-hidden="true"></div>
+            <div class="scene-popup__panel floor-briefing">
+              <header class="scene-popup__heading">
+                <div><p class="eyebrow">MISSION CONTROL</p><h3 id="floorIncidentTitle" data-i18n="activeIncidentLabel">진행 중인 장애</h3></div>
+                <button class="scene-popup__close" id="floorIncidentCloseBtn" type="button" aria-label="Close active incident">×</button>
+              </header>
+              <div class="floor-incident-empty" id="floorIncidentEmpty">
+                <span class="floor-incident-empty__radar" aria-hidden="true"></span>
+                <strong data-i18n="noActiveIncident">진행 중인 장애 없음</strong>
+                <small data-i18n="selectRackObjective">Floor를 순찰하고 Rack 상태를 확인하세요.</small>
+              </div>
+              <div class="floor-incident-content" id="floorIncidentContent" hidden>
+                <div class="floor-incident-id"><span id="floorIncidentTicket">TKT-0000</span><b id="floorIncidentCategory">SERVER</b></div>
+                <h4 id="floorIncidentName">UNIDENTIFIED INCIDENT</h4>
+                <dl>
+                  <div><dt data-i18n="rackLabel">Rack</dt><dd id="floorIncidentRack">—</dd></div>
+                  <div><dt data-i18n="severityLabel">심각도</dt><dd id="floorIncidentSeverity">—</dd></div>
+                  <div><dt data-i18n="statusLabel">상태</dt><dd id="floorIncidentStage">—</dd></div>
+                  <div><dt>SLA</dt><dd id="floorIncidentSla">—</dd></div>
+                </dl>
+                <section class="floor-briefing-block">
+                  <h5 data-i18n="investigationHintLabel">조사 힌트</h5>
+                  <p id="floorIncidentHint">—</p>
+                </section>
+              </div>
+            </div>
+          </section>
         </div>
-
-        <aside class="floor-briefing" aria-labelledby="floorIncidentTitle">
-          <header>
-            <p class="eyebrow">MISSION CONTROL</p>
-            <h3 id="floorIncidentTitle" data-i18n="activeIncidentLabel">진행 중인 장애</h3>
-          </header>
-          <div class="floor-incident-empty" id="floorIncidentEmpty">
-            <span class="floor-incident-empty__radar" aria-hidden="true"></span>
-            <strong data-i18n="noActiveIncident">진행 중인 장애 없음</strong>
-            <small data-i18n="selectRackObjective">Floor를 순찰하고 Rack 상태를 확인하세요.</small>
-          </div>
-          <div class="floor-incident-content" id="floorIncidentContent" hidden>
-            <div class="floor-incident-id"><span id="floorIncidentTicket">TKT-0000</span><b id="floorIncidentCategory">SERVER</b></div>
-            <h4 id="floorIncidentName">UNIDENTIFIED INCIDENT</h4>
-            <dl>
-              <div><dt data-i18n="rackLabel">Rack</dt><dd id="floorIncidentRack">—</dd></div>
-              <div><dt data-i18n="severityLabel">심각도</dt><dd id="floorIncidentSeverity">—</dd></div>
-              <div><dt data-i18n="statusLabel">상태</dt><dd id="floorIncidentStage">—</dd></div>
-              <div><dt>SLA</dt><dd id="floorIncidentSla">—</dd></div>
-            </dl>
-            <section class="floor-briefing-block">
-              <h5 data-i18n="investigationHintLabel">조사 힌트</h5>
-              <p id="floorIncidentHint">—</p>
-            </section>
-          </div>
-          <section class="floor-action-hints">
-            <h4 data-i18n="actionHintsLabel">Action 안내</h4>
-            <p><kbd>E</kbd> <span data-i18n="investigatePrompt">조사하기</span></p>
-            <p data-i18n="terminalHintLabel">Rack을 선택하면 안전한 Simulated Terminal이 연결됩니다.</p>
-            <ol class="floor-action-list">
-              <li data-i18n="actionInspectRack">Incident Rack에 접근해 상태를 확인합니다.</li>
-              <li data-i18n="actionReviewEvidence">Terminal에서 Evidence를 수집합니다.</li>
-              <li data-i18n="actionResolveVerify">Diagnosis 후 복구하고 시스템을 확인합니다.</li>
-            </ol>
-          </section>
-        </aside>
       </div>
-
-      <div class="floor-bottom-hud">
-        <aside class="operator-panel" aria-labelledby="operatorTitle">
-          <div class="operator-panel__heading">
-            <div>
-              <p class="eyebrow">FIELD CONTROLS</p>
-              <h3 id="operatorTitle" data-i18n="controlsLabel">조작 방법</h3>
-            </div>
-            <span class="operator-panel__online">ONLINE</span>
-          </div>
-          <section class="floor-control-guide" aria-labelledby="floorControlsTitle">
-            <h4 id="floorControlsTitle" class="sr-only" data-i18n="controlsLabel">조작 방법</h4>
-            <div class="control-command control-command--move">
-              <span class="key-cluster" aria-hidden="true"><kbd class="key-up">↑</kbd><kbd class="key-left">←</kbd><kbd class="key-down">↓</kbd><kbd class="key-right">→</kbd></span>
-              <span><b data-i18n="movementLabel">이동</b><small>MOVE</small></span>
-            </div>
-            <div class="control-command control-command--interact">
-              <kbd class="key-interact">E</kbd><span><b data-i18n="interactionLabel">상호작용</b><small>INTERACT</small></span>
-            </div>
-          </section>
-          <div class="operator-loadout">
-            <span class="operator-loadout__label" data-i18n="operatorTitle">오퍼레이터 선택</span>
-            <div class="operator-cards" id="operatorCards"></div>
-          </div>
-          <p class="operator-notice" data-i18n="operatorNotice">공개 배포용 오리지널 CSS placeholder이며 특정 캐릭터 자산을 사용하지 않습니다.</p>
-        </aside>
-
-        <section class="terminal-panel" aria-labelledby="terminalTitle">
-          <div class="terminal-header">
-            <div>
-              <p class="eyebrow" data-i18n="safeEnvironmentLabel">안전한 Simulation 환경</p>
-              <h2 id="terminalTitle"><span data-i18n="investigationTerminalLabel">조사 터미널</span> <span id="terminalRackLabel">NO RACK SELECTED</span></h2>
-            </div>
-            <button class="terminal-clear-btn" id="terminalClearBtn" type="button" disabled>CLEAR</button>
-          </div>
-          <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
-          <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
-          <form class="terminal-command" id="terminalForm" autocomplete="off">
-            <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
-            <span class="terminal-prompt" id="terminalPrompt">operator@rack--:~$</span>
-            <input id="terminalInput" type="text" inputmode="text" spellcheck="false" autocapitalize="none" placeholder="Rack을 선택하세요" disabled>
-            <button class="terminal-run-btn" id="terminalRunBtn" type="submit" disabled>RUN</button>
-          </form>
-          <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
-          <div class="terminal-shortcuts" aria-hidden="true"><span><b>?</b> HELP</span><span><b>⌁</b> COMMANDS</span><span><b>●</b> SAFE SIMULATION</span></div>
-        </section>
-
-        <aside class="floor-tactical-hud">
-          <section class="floor-objectives" aria-labelledby="floorObjectivesTitle">
-            <div class="floor-tactical-heading"><h4 id="floorObjectivesTitle" data-i18n="objectivesLabel">목표</h4><span>LIVE</span></div>
-            <ol id="floorObjectives"></ol>
-          </section>
-          <section class="floor-mini-map" aria-labelledby="floorMapTitle">
-            <div class="floor-mini-map__heading"><h4 id="floorMapTitle" data-i18n="dataCenterMapLabel">데이터센터 맵</h4><span>HALL A</span></div>
-            <div class="floor-mini-map__grid" id="floorMiniMap"></div>
-          </section>
-        </aside>
-      </div>
-
-      <footer class="floor-status-strip" aria-label="Floor Mode 상태">
-        <span><i class="status-dot status-dot--green" aria-hidden="true"></i><b data-i18n="operatorStatusLabel">OPERATOR</b><strong id="floorStatusOperator">ROOKIE EXPLORER</strong></span>
-        <span><i class="status-shield" aria-hidden="true">◆</i><b data-i18n="clearanceLabel">CLEARANCE</b><strong>L2</strong></span>
-        <span class="floor-status-health"><b data-i18n="systemHealthLabel">SYSTEM HEALTH</b><i aria-hidden="true"><em></em></i><strong id="floorSystemHealth">100%</strong></span>
-        <span><i class="status-dot status-dot--cyan" aria-hidden="true"></i><b data-i18n="networkStatusLabel">NETWORK</b><strong>ONLINE</strong></span>
-        <span class="floor-status-build"><b>BUILD</b><strong>V1.1 PREVIEW</strong></span>
-      </footer>
     </section>
 
     <details class="legacy-operations">
