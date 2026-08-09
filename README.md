@@ -1,246 +1,217 @@
 # DC OPS: NIGHT SHIFT
 
-**DC OPS: NIGHT SHIFT**는 데이터센터 운영과 장애 대응 흐름을 학습하기 위한 브라우저 기반 **Incident Response Simulator**입니다.
+**DC OPS: NIGHT SHIFT**는 데이터센터 운영과 장애 대응 과정을 직접 수행해볼 수 있도록 만든 브라우저 기반 **Data Center Incident Response Simulator**입니다.
 
-제한된 시간의 Night Shift 동안 Rack에서 발생한 Incident를 조사하고, Evidence를 확보해 Diagnosis와 Recovery를 수행합니다. Shift 종료 후에는 SLA, MTTR, RCA와 운영 기록을 확인할 수 있습니다.
+사용자는 Night Shift 동안 데이터센터 Floor를 이동하며 장애가 발생한 Rack을 찾고, **Safe Simulated Terminal**에서 Linux 운영 명령을 사용해 Evidence를 수집한 뒤 Root Cause를 진단하고 Recovery Action을 수행합니다.
 
-이 프로젝트는 교육 및 Portfolio 목적의 Simulation입니다. 실제 데이터센터 인프라나 Monitoring System에 연결되지 않으며, 실제 Linux Shell 명령을 실행하지 않습니다.
+v1.1 Floor Mode에서는 Recovery Action을 선택했다고 Incident가 즉시 종료되지 않습니다.
+Terminal에서 시스템이 정상 상태로 돌아왔는지 **Verification**까지 완료해야 Incident가 최종 Resolve됩니다.
 
-**Live Demo (v1.0 stable):** [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
+> 이 프로젝트는 교육 및 Portfolio 목적의 Simulation입니다.
+> 실제 데이터센터, Linux Shell, Monitoring System 또는 운영 서버에 연결되지 않습니다.
 
-## 프로젝트 개요 (Overview)
+**Live Demo — v1.0 Stable**
+https://d35scspd118fhn.cloudfront.net
 
-데이터센터 운영에서 사용하는 Incident Response 흐름을 짧고 반복 가능한 브라우저 경험으로 구성했습니다.
+**Current Development — v1.1 Floor Mode Preview**
+Branch: `feature/v1.1-floor-mode`
 
-1. Easy, Normal, Hard 중 Difficulty를 선택하고 Shift를 시작합니다.
-2. 수동 또는 자동으로 생성된 Incident를 Queue에서 확인합니다.
-3. 장애가 발생한 Rack을 선택하고 Safe Simulated Terminal로 조사합니다.
-4. 수집한 Evidence를 바탕으로 Diagnosis와 Recovery Action을 결정합니다.
-5. SLA가 만료되기 전에 Incident를 복구합니다.
-6. Incident History, Timeline, RCA, Category Analytics와 Shift Archive를 확인합니다.
+---
 
-## 제작 목적 (Why I Built This)
-
-데이터센터 장애 대응은 단순히 문제를 해결하는 것뿐 아니라 우선순위 판단, Evidence 수집, 제한 시간 관리와 사후 분석을 함께 요구합니다.
-
-이 프로젝트는 그 흐름을 하나의 Frontend 애플리케이션으로 구현하면서 다음 역량을 보여주기 위해 제작했습니다.
-
-- Incident 상태와 사용자 Action을 연결하는 게임 로직 설계
-- SLA, MTTR, Accuracy 등 운영 지표 계산
-- RCA와 Shift 기록을 위한 데이터 구조 설계
-- LocalStorage 기반 영속성, schema validation과 오류 처리
-- 자동 테스트와 GitHub Actions CI 구성
-- 접근성과 Responsive UI를 고려한 Vanilla JavaScript 개발
-
-실제 인프라 동작을 재현하기보다는 Incident Response의 절차와 데이터 흐름을 명확하게 학습하는 데 초점을 맞췄습니다.
-
-## Core Workflow
+## Core Gameplay
 
 ```text
-Incident → Investigation → Evidence → Diagnosis → Recovery
-        → SLA / MTTR → Incident History / RCA → Shift Archive
+Incident 발생
+      ↓
+Data Center Floor에서 장애 Rack 탐색
+      ↓
+E 상호작용
+      ↓
+Safe Simulated Terminal
+      ↓
+Evidence 수집
+      ↓
+Root Cause Diagnosis
+      ↓
+Recovery Action
+      ↓
+Verification Pending
+      ↓
+Terminal에서 정상 상태 확인
+      ↓
+Verification Passed
+      ↓
+Incident Resolved
 ```
 
-Hard Mode에서는 필요한 수의 유효한 Evidence를 확보해야 Diagnosis가 활성화됩니다. Easy와 Normal에서는 Investigation이 선택 사항이지만, 실행한 command와 유효·무효 조사 기록은 동일하게 집계됩니다.
+단순히 정답 버튼을 선택하는 방식이 아니라, 사용자가 Terminal 명령으로 장애 Evidence를 수집하고 그 결과를 기반으로 장애 원인을 판단하도록 구성했습니다.
 
-## 주요 기능 (Features)
+---
 
-- 검증된 Incident Scenario 15종
-- `SERVER`, `STORAGE`, `NETWORK`, `POWER`, `COOLING` 5개 Category
-- Easy / Normal / Hard Difficulty System
-- Priority 기반 Incident Queue와 Ticket별 SLA Timer
-- Incident별 Evidence를 제공하는 Allowlist 기반 Simulated Terminal
-- Hard Mode Investigation Evidence Gate
-- Diagnosis와 Recovery Action 선택 및 penalty 처리
-- Difficulty별 Recovery Reward와 최저 0점 Score 정책
-- Terminal Evidence, Timeline, RCA, Lessons Learned를 포함한 Incident History
-- SLA Compliance, MTTR, Accuracy, Investigation Coverage, Category Performance 분석
-- LocalStorage 기반 Shift Archive, Filter, Previous Shift Comparison, Personal Best
-- Archive Record 개별 삭제와 전체 삭제
-- Node.js built-in assertion을 사용하는 automated regression test
-- GitHub Actions 기반 syntax check와 CI
-- Desktop과 mobile breakpoint를 고려한 Responsive 구조
-- v1.1 preview: R01~R10과 UPS / PDU-A / PDU-B / CRAC를 배치한 game-focused 2D Floor scaffold
-- v1.1 preview PHASE 1: 중앙 Floor Scene을 Phaser 3.90.0 Canvas로 렌더링하고 연속 방향키 이동, footprint 충돌, y-depth, 인접 Rack의 E 상호작용을 적용
-- v1.1 preview: Game Asset Pass 2 — metallic room/floor illustration과 상태별 Rack·UPS·PDU·CRAC를 25개 original SVG file asset으로 분리
-- v1.1 preview: 1440×640 logical scene에 맞춘 original Environment Clean Plate PNG를 Phaser background로 사용
-- v1.1 preview: 동일한 foot anchor를 사용하는 4-direction idle + 2-frame walk 구성의 original Operator sprite
-- v1.1 preview: keyboard key 형태의 Controls, console형 Terminal, 설비 상태를 구분하는 mini map과 정보 밀도를 높인 Incident HUD
-- v1.1 preview: 기본 scene-first 화면과 메뉴로 복귀 가능한 기존 v1.0 Dashboard
+## Why I Built This
 
-Responsive 구조와 정확한 375×812 Device Emulation을 실제 CloudFront 환경에서 검증했습니다. Dashboard, Terminal, Incident History와 Shift Archive에서 수평 overflow나 console error가 발생하지 않았습니다.
+데이터센터 운영 업무에서는 장애를 발견하는 것뿐 아니라 다음과 같은 과정이 중요합니다.
 
-## Incident Categories
+- 장애 우선순위 판단
+- 시스템 상태 확인
+- Linux / Network 명령을 통한 Evidence 수집
+- Root Cause 분석
+- Recovery Action 수행
+- 복구 후 서비스 정상 여부 확인
+- SLA 및 MTTR 기록
+- Incident History와 RCA 정리
 
-| Category | 주요 조사 범위 |
-| --- | --- |
-| `SERVER` | Service, CPU, memory, process 상태 |
-| `STORAGE` | Capacity, I/O, mount, filesystem 증상 |
-| `NETWORK` | Connectivity, DNS, interface, packet path 증상 |
-| `POWER` | PSU, voltage, redundant power 증상 |
-| `COOLING` | Temperature, airflow, fan, cooling 증상 |
+이 프로젝트는 이러한 Incident Response 흐름을 인터랙티브한 게임 형태로 구현하면서 다음 역량을 보여주는 것을 목표로 했습니다.
 
-## Architecture
+- Linux 및 데이터센터 운영 Workflow 이해
+- Incident / SLA / Score / Recovery 상태 관리
+- Phaser 기반 2D Game Scene 구현
+- DOM UI와 Canvas Game Scene 간 상태 연결
+- Collision / Interaction / Animation 구현
+- Safe Simulated Terminal 설계
+- Evidence → Diagnosis → Recovery → Verification Workflow 설계
+- LocalStorage 기반 운영 기록 관리
+- Automated Regression Test 구성
+- Git / GitHub 기반 Feature Branch 개발
+- AWS Static Hosting 및 GitHub Actions CI/CD 구성
 
-```mermaid
-flowchart TD
-    UI["DOM HUD and v1.0 Dashboard<br/>index.html + styles.css"] --> Engine["Shift, Incident and UI source of truth<br/>app.js"]
-    Assets["Original 2D game assets<br/>environment + equipment + operator + UI SVG"] --> Phaser["Phaser 3.90.0 Canvas Floor Scene<br/>phaser-floor.js"]
-    Floor["Floor metadata, legacy fallback and i18n<br/>floor.js"] --> Engine
-    Floor --> Phaser
-    Engine <-->|"Rack state / player position / interaction bridge"| Phaser
-    Catalog["Validated incident catalog<br/>incidents.js"] --> Engine
-    Engine --> Analytics["Pure analytics and game-rule helpers<br/>analytics.js"]
-    Engine --> Storage["Archive validation and CRUD<br/>storage.js"]
-    Storage --> LocalStorage["Browser LocalStorage<br/>dcOpsShiftArchive"]
-    Tests["Dependency-free Node regression tests"] --> Catalog
-    Tests --> Analytics
-    Tests --> Storage
-    Tests --> Floor
-```
+---
 
-배포 구조는 다음과 같습니다.
+# v1.1 Floor Mode
 
-```mermaid
-flowchart LR
-    Browser["Browser"] -->|HTTPS| CloudFront["Amazon CloudFront"]
-    CloudFront -->|"OAC + SigV4"| S3["Private Amazon S3 REST origin"]
-    Actions["GitHub Actions<br/>production environment"] -->|"OIDC temporary credentials"| Role["Least-privilege IAM Role"]
-    Role -->|"Sync six static files"| S3
-    Role -->|"Create invalidation"| CloudFront
-```
+기존 v1.0은 Dashboard 중심의 Incident Response Simulator였습니다.
 
-Application에는 Backend, Database Server, AWS API 또는 실제 Shell 연결이 없습니다. AWS는 정적 파일을 전달하는 Hosting 계층으로만 사용합니다. 모든 게임 상태와 UI 제어는 브라우저 내부에서 처리되며, 완료된 Shift Record만 LocalStorage에 저장됩니다.
+v1.1에서는 이를 실제 게임에 가까운 **Scene-first Data Center Floor Mode**로 확장했습니다.
 
-## Project Structure
+## Data Center Floor
+
+- Phaser `3.90.0`
+- Logical World: `1440 × 640`
+- Arrow Key 기반 Continuous Movement
+- `PLAYER_SPEED = 270`
+- Rack / Equipment Collision
+- Rack 근접 Interaction
+- `E` 키를 통한 Rack Terminal 연결
+- Foot Position 기반 Depth Sorting
+- Phaser 실패 시 Legacy DOM Fallback
+- Desktop 중심 Responsive Scene
+
+현재 Floor에는 다음 설비가 배치됩니다.
 
 ```text
-dc-ops-simulator/
-├── .github/
-│   └── workflows/
-│       ├── ci.yml
-│       └── deploy.yml
-├── assets/
-│   ├── environment/
-│   ├── equipment/
-│   ├── operators/operator-a/
-│   └── ui/
-├── docs/
-│   └── DEPLOYMENT.md
-├── infra/
-│   ├── cloudformation.yml
-│   └── github-oidc.yml
-├── tests/
-│   └── run-tests.js
-├── scripts/
-│   └── vendor-phaser.js
-├── vendor/
-│   ├── phaser.min.js
-│   └── PHASER_LICENSE.md
-├── .gitattributes
-├── .gitignore
-├── analytics.js
-├── app.js
-├── floor.js
-├── phaser-floor.js
-├── incidents.js
-├── index.html
-├── package-lock.json
-├── package.json
-├── PROJECT_STATUS.md
-├── README.md
-├── storage.js
-├── styles.css
-└── THIRD_PARTY_NOTICES.md
+R01 ~ R10
+UPS
+PDU-A
+PDU-B
+CRAC
+Operator
 ```
 
-| 파일 | 역할 |
-| --- | --- |
-| `index.html` | Dashboard, 2D Floor, Terminal, History, Archive, Shift Report UI 구조 |
-| `styles.css` | Dark NOC Style, 2D Floor, 상태 표현, Modal과 Responsive Layout |
-| `assets/` | Room/Floor, Rack·설비, warning UI와 12-frame Operator로 구성된 original SVG game asset |
-| `app.js` | Shift, Incident, SLA, Score, Terminal, Archive와 DOM HUD의 source of truth 및 Phaser bridge |
-| `floor.js` | Floor metadata, legacy DOM 이동·충돌·근접 판정, Operator와 i18n dictionary |
-| `phaser-floor.js` | Canvas Scene, 4방향 연속 이동·animation, footprint collision, y-depth와 E interaction |
-| `vendor/` | CDN 없이 로드하는 Phaser 3.90.0 browser build와 MIT license 원문 |
-| `scripts/vendor-phaser.js` | exact npm dependency에서 Phaser browser build와 license를 복사하는 vendor script |
-| `incidents.js` | 15종 Incident Catalog와 데이터 validation |
-| `analytics.js` | RCA, Shift Analytics, Score rule, Comparison과 Personal Best 계산 |
-| `storage.js` | LocalStorage schema validation과 Shift Archive CRUD |
-| `tests/run-tests.js` | Node.js built-in module 기반 automated regression test |
-| `.github/workflows/ci.yml` | Push와 Pull Request에서 syntax check와 test 실행 |
-| `.github/workflows/deploy.yml` | test 통과 후 OIDC로 AWS에 수동 배포하는 Workflow |
-| `infra/cloudformation.yml` | Private S3, CloudFront와 OAC를 정의한 hosting template |
-| `infra/github-oidc.yml` | GitHub OIDC Provider와 최소 권한 deploy Role template |
-| `docs/DEPLOYMENT.md` | bootstrap, 배포, rollback, cleanup과 비용 안내 |
-| `PROJECT_STATUS.md` | 현재 Version, Known Issues와 검증 결과 기록 |
+현재 Incident Gameplay는 우선 R01~R06 Rack을 중심으로 연결되어 있으며, R07~R10 및 Facility Interaction은 후속 확장 범위입니다.
 
-## Testing
+---
 
-Test Runner 자체는 Node.js built-in module을 사용합니다. 현재 **50 automated checks**가 Catalog, 게임 규칙, Analytics, RCA, Archive, legacy Floor helper와 Phaser Floor의 이동 intent·layout·collision metadata·mini map mapping을 검증합니다.
+# Game Asset Pipeline
+
+초기 v1.1에서는 3/4 Perspective 형태의 Rack과 Equipment Asset을 사용했습니다.
+
+하지만 Floor Scene의 정면 구도와 시각적으로 맞지 않아 주요 Asset 방향을 다시 설계하고 **Front-facing Visual Pack**으로 교체했습니다.
+
+현재 활성 Visual Pack:
+
+```text
+ops-front-v2
+```
+
+## Rack
+
+- Normal
+- Warning
+- Critical
+
+## Equipment
+
+- UPS
+- PDU-A
+- PDU-B
+- CRAC
+
+## Operator
+
+Operator는 4방향 Animation을 사용합니다.
+
+```text
+DOWN
+UP
+LEFT
+RIGHT
+```
+
+각 방향은 다음 Frame을 가집니다.
+
+- Idle
+- Walk Frame 1
+- Walk Frame 2
+- Walk Frame 3
+- Walk Frame 4
+
+모든 Sprite는 동일한 Foot Baseline을 기준으로 정규화했습니다.
+
+Player의 Visual Size와 Collision Footprint를 서로 분리하여, 캐릭터 이미지 전체가 아니라 실제 발 위치를 기준으로 Collision과 Depth를 계산합니다.
+
+Asset 생성 및 정규화 과정은 다음 Script로 재현할 수 있습니다.
+
+```text
+scripts/build-ops-front-v2-assets.py
+```
+
+---
+
+# Scene-first UI
+
+v1.1 개발 과정에서 기존 Dashboard 형태의 많은 고정 Panel을 제거하고 게임 화면 자체를 최대한 크게 사용하는 구조로 변경했습니다.
+
+제거 또는 축소한 UI:
+
+- Persistent Controls Panel
+- Operator Selection
+- Persistent Terminal
+- Persistent Objectives
+- Mini Map
+- Bottom Dashboard Row
+- Permanent Active Incident Column
+
+대신 필요한 기능을 **Scene Popup** 방식으로 전환했습니다.
+
+현재 주요 Popup:
+
+```text
+Terminal
+Objectives
+Active Incident
+Diagnosis
+Recovery
+```
+
+Popup은 동시에 하나만 열리며 `ESC`로 닫을 수 있습니다.
+
+Popup 종료 후에는 Phaser Scene으로 Focus가 복귀합니다.
+
+---
+
+# Safe Simulated Terminal
+
+Terminal은 실제 Linux Shell이 아닙니다.
+
+사용자가 입력한 명령을 실제 운영체제로 전달하지 않고, Incident Scenario와 연결된 **Simulation Output**을 반환합니다.
+
+지원 명령 예:
 
 ```bash
-npm test
-npm run check
-```
-
-- `npm test`: 50개 automated checks 실행
-- `npm run check`: 기존 JavaScript와 `phaser-floor.js`, vendor script, test runner syntax 검사
-- `npm run vendor:phaser`: exact dependency `phaser@3.90.0`의 browser build와 MIT license를 `vendor/`에 재생성
-
-GitHub Actions CI는 `main` push와 Pull Request에서 check와 test를 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용합니다. v1.1 branch의 Phaser 파일은 아직 production deploy artifact에 포함하지 않았습니다.
-
-별도의 v1.0 AWS Deploy Workflow는 `main`의 `workflow_dispatch` 실행만 허용합니다. 36개 production regression check가 모두 성공한 뒤 GitHub OIDC 임시 credential로 Private S3에 6개 정적 파일을 배포하고 CloudFront cache invalidation과 공개 endpoint Smoke Test를 수행합니다. v1.1 preview 파일은 아직 production artifact에 포함하지 않습니다. 장기 AWS Access Key는 GitHub에 저장하지 않습니다. 자세한 구조와 운영 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
-
-주요 테스트 범위:
-
-- Incident Catalog와 Difficulty Pool
-- Score multiplier와 최저 0점 정책
-- Terminal command 분류와 full-rack warning deduplication
-- RCA와 Investigation Coverage
-- LocalStorage schema와 손상 데이터 fallback
-- Shift Snapshot, Archive CRUD와 최대 50개 제한
-- Previous Shift Comparison과 Personal Best
-- 2D Floor layout, 경계·충돌 이동과 인접 상호작용 판정
-- Phaser Floor의 4방향 단일 movement intent, 12개 animation texture 계약, scene layout과 continuous mini map mapping
-
-## 로컬 실행 (Run Locally)
-
-Build 과정 없이 `index.html`을 직접 열어 실행할 수 있습니다. 다만 LocalStorage와 브라우저 보안 정책을 일관되게 확인하려면 localhost에서 실행하는 방식을 권장합니다.
-
-```bash
-python -m http.server 8000
-```
-
-브라우저에서 다음 주소를 엽니다.
-
-```text
-http://localhost:8000
-```
-
-일반적인 Desktop Browser에서는 `file://` 방식으로도 실행할 수 있지만, local file의 LocalStorage 동작은 Browser와 privacy policy에 따라 달라질 수 있습니다. Archive는 현재 Browser Profile과 Origin에만 저장됩니다.
-
-## Tech Stack
-
-- Semantic HTML
-- Responsive CSS
-- Vanilla JavaScript
-- Phaser `3.90.0` (exact npm dependency, vendored browser build, MIT)
-- Browser LocalStorage
-- Node.js built-in modules
-- GitHub Actions
-- AWS CloudFormation
-- Amazon S3, Amazon CloudFront, Origin Access Control
-- GitHub OIDC 기반 IAM Role
-
-## Simulation Scope
-
-Terminal은 실제 Shell이 아니라 고정된 Allowlist를 사용하는 **Safe Simulated Terminal**입니다.
-
-지원하는 조사 명령 예시:
-
-```text
+help
 top
+ps aux
+uptime
 df -h
 ping [host]
 curl [url]
@@ -250,55 +221,713 @@ journalctl -u nginx
 ipmitool sensor
 ```
 
-입력한 command는 운영체제로 전달되지 않으며, Incident Scenario와 연결된 안전한 Simulation Output만 반환합니다. Target을 받는 명령은 입력한 target을 표시하지만 실제 DNS Resolver, Network Stack, Process Table, Permission, Pipe, Redirect 또는 전체 Shell Option을 구현하지 않습니다.
+Incident 종류에 따라 같은 명령도 다른 결과를 반환할 수 있습니다.
 
-따라서 Terminal Evidence는 실제 서버 진단 결과가 아니라 Investigation Workflow를 학습하기 위한 데이터입니다.
+예를 들어 서비스 장애 상태에서는:
 
-## 현재 제한 사항 (Current Limitations)
+```text
+systemctl status nginx
 
-- 실행 중인 Shift는 페이지 새로고침 후 복구되지 않습니다.
-- Shift Archive는 하나의 Browser Profile과 Origin에 저장되며 기기 간 동기화되지 않습니다.
-- Storage schema v1 validation은 있지만 실제 migration runner는 없습니다.
-- Archive import/export와 cloud sync를 지원하지 않습니다.
-- Archive pagination, 검색, 장기 trend chart가 없습니다.
-- Background Tab에서는 화면 갱신 timer가 일시 중지될 수 있습니다. 경과 시간 계산은 `Date.now()`를 기준으로 합니다.
-- Incident 간격, SLA, penalty와 grade는 추가 playtest를 통해 조정할 여지가 있습니다.
-- Custom Domain과 ACM Certificate는 구성하지 않았으며 CloudFront 기본 domain을 사용합니다.
-- 2D Floor의 R07~R10과 UPS / PDU-A / PDU-B / CRAC 상호작용은 placeholder이며 아직 Incident Scenario와 연결되지 않습니다.
-- 언어 전환은 v1.1 scaffold의 핵심 UI 문자열부터 적용했으며 기존 v1.0 전체 UI 번역은 범위에 포함하지 않았습니다.
-- Operator는 선택 상태와 player label만 연결되며 능력치나 gameplay 차이는 없습니다.
-- v1.1 preview의 `assets/`는 아직 v1.0 production 배포 artifact에 포함되지 않습니다. Release 단계에서 별도 승인을 거쳐 deploy Workflow의 artifact 범위를 갱신해야 합니다.
-- Phaser PHASE 1은 local development branch에서 검증한 unreleased preview입니다. Canvas scene은 mobile 폭에 맞춰 축소되며 touch control은 아직 제공하지 않습니다.
+Active: failed
+```
 
-## Roadmap
+Recovery 이후에는:
 
-### v1.0 — AWS Deployment & Portfolio Release
+```text
+systemctl status nginx
 
-- Private S3 + CloudFront + OAC 기반 Static Hosting 운영
-- GitHub OIDC와 최소 권한 Deploy Role 기반 수동 배포
-- HTTPS redirect, cache policy, rollback과 cleanup 절차 문서화
-- 공개 URL에서 Desktop workflow 및 375×812 Device Emulation 검증
-- GitHub Actions CI와 배포 Workflow 모니터링
+Active: active (running)
+```
 
-### v1.1 — 2D Data Center Floor Mode (planning + scaffold)
+과 같이 Simulated Server State가 변경될 수 있습니다.
 
-- R01~R10, UPS / PDU-A / PDU-B / CRAC와 Operator를 표시하는 2D Floor 구조
-- 방향키 이동, 화면 경계·장비 충돌과 인접 Rack E 상호작용
-- R01~R06을 기존 Incident / Terminal / Investigation 흐름에 연결
-- Phaser Canvas의 4방향 continuous movement, 12-frame original SVG Operator animation과 한국어/English dictionary 구조
-- wall·lighting·exit·door·floor tile·aisle grate를 포함한 scene-first room과 file 기반 original SVG Rack/equipment/Operator sprite
-- compact menu, 우측 Incident panel, 하단 Controls/Terminal/Objective/mini map HUD와 v1.0 Dashboard 전환
-- R07~R10 및 설비별 상호작용은 이후 iteration에서 확장
+Terminal은 Rack별 독립 Session을 유지합니다.
 
-v1.0 이후에도 Simulation 범위를 유지하면서 playtest 기반 SLA/score tuning과 Archive 사용성을 개선할 예정입니다. 실제 Ubuntu 또는 EC2 Lab을 진행하더라도 이 Browser Simulation과는 별도 환경과 문서로 구분합니다.
+```text
+R01 Terminal History
+R02 Terminal History
+R03 Terminal History
+...
+```
 
-## Version History
+다른 Rack으로 이동했다 돌아와도 기존 Command / Output History가 유지됩니다.
+
+Terminal 재진입 및 새 Command 실행 시 최신 Output을 보여주도록 Scroll Behavior를 개선했고, 사용자가 직접 위쪽 History를 확인하는 동안에는 일반 UI Update가 Scroll 위치를 강제로 바꾸지 않습니다.
+
+Terminal Input에 Focus가 있을 때 Arrow Key와 `E` 입력은 Player Movement로 전달되지 않습니다.
+
+---
+
+# Evidence System
+
+Incident가 발생하면 사용자는 Terminal Command를 이용해 Evidence를 수집합니다.
+
+예:
+
+```text
+EVIDENCE 0 / 2
+
+↓ ipmitool sensor
+
+EVIDENCE 1 / 2
+
+↓ uptime
+
+EVIDENCE 2 / 2
+```
+
+필요한 Evidence가 충족되면:
+
+```text
+[ 진단하기 ]
+```
+
+버튼이 활성화됩니다.
+
+Hard Difficulty에서는 필요한 Evidence를 확보하기 전에는 Diagnosis를 진행할 수 없습니다.
+
+---
+
+# Root Cause Diagnosis
+
+Evidence를 충분히 확보하면 Floor Scene 내부에서 Diagnosis Popup을 열 수 있습니다.
+
+예:
+
+```text
+ROOT CAUSE DIAGNOSIS
+
+Rack: R04
+Ticket: TKT-0001
+
+Collected Evidence
+✓ PSU2 INPUT LOST
+✓ REDUNDANCY DEGRADED
+
+Select Root Cause
+
+A. Network Port Blocked
+B. Rack PDU Feed A Lost
+C. Disk Capacity Exhausted
+D. DNS Resolver Failure
+```
+
+잘못된 Diagnosis는 기존 Penalty 정책에 따라 Score에 영향을 줄 수 있으며 Incident는 해결되지 않습니다.
+
+올바른 Root Cause를 선택하면 Recovery 단계로 진행합니다.
+
+---
+
+# Recovery Action
+
+Root Cause가 확인되면 기존 Incident Scenario의 Recovery Action을 사용합니다.
+
+예:
+
+```text
+RECOVERY ACTION
+
+Confirmed Root Cause
+Rack PDU Feed A Lost
+
+A. Restart nginx
+B. Restore redundant power feed
+C. Flush DNS cache
+D. Remove log files
+```
+
+기존 v1.0 Dashboard에서는 Recovery 성공 후 기존 방식대로 Incident가 Resolve됩니다.
+
+v1.1 Floor Mode에서는 한 단계가 추가됩니다.
+
+```text
+RECOVERY APPLIED
+VERIFICATION PENDING
+```
+
+즉, Recovery Action을 맞췄다고 Incident가 즉시 끝나지 않습니다.
+
+---
+
+# Recovery Verification
+
+Recovery 이후 사용자는 다시 Terminal에서 시스템이 정상적으로 복구되었는지 확인해야 합니다.
+
+Browser Regression에서 검증한 POWER Incident 예:
+
+```text
+Rack:
+R04
+
+Incident:
+Rack PDU Feed A Lost
+
+Investigation:
+ipmitool sensor
+uptime
+
+Diagnosis:
+Rack PDU Feed A Lost
+
+Recovery:
+Restore redundant power feed
+
+Status:
+VERIFICATION PENDING
+```
+
+관련 없는 Verification Command를 실행하면 Incident는 계속 Pending 상태를 유지합니다.
+
+필수 Verification Command로 정상 상태가 확인되면:
+
+```text
+VERIFICATION PASSED
+
+INCIDENT RESOLVED
+```
+
+그 후 다음 상태가 갱신됩니다.
+
+- Rack Healthy 복귀
+- Active Incident 감소
+- Score 반영
+- SLA 반영
+- MTTR 기록
+- Incident History 생성
+- Terminal History 유지
+
+---
+
+# Incident System
+
+현재 Incident Catalog는 총 15개의 Scenario를 포함합니다.
+
+| Category | Investigation Area |
+| --- | --- |
+| `SERVER` | Service, CPU, Memory, Process |
+| `STORAGE` | Capacity, I/O, Mount, Filesystem |
+| `NETWORK` | Connectivity, DNS, Interface, Packet Path |
+| `POWER` | PSU, Voltage, Redundant Power |
+| `COOLING` | Temperature, Fan, Airflow |
+
+Difficulty:
+
+```text
+EASY
+NORMAL
+HARD
+```
+
+각 Incident는 다음 데이터를 가질 수 있습니다.
+
+- Affected Rack
+- Symptom
+- Severity
+- SLA
+- Useful Commands
+- Required Evidence
+- Diagnosis Options
+- Correct Root Cause
+- Recovery Options
+- Correct Recovery Action
+- Verification State
+- Event History
+
+---
+
+# Incident Metrics
+
+Shift 동안 다음 지표를 기록합니다.
+
+- Score
+- SLA Compliance
+- MTTR
+- Diagnosis Accuracy
+- Investigation Coverage
+- Category Performance
+- Wrong Diagnosis
+- Wrong Recovery Action
+- Incident History
+- RCA
+- Lessons Learned
+
+Shift가 종료되면 결과를 LocalStorage 기반 Archive에 저장할 수 있습니다.
+
+---
+
+# Architecture
+
+```mermaid
+flowchart TD
+
+    UI["DOM HUD / Scene Popup<br/>index.html + styles.css"]
+
+    Engine["Incident / Shift / SLA / Score<br/>app.js"]
+
+    Workflow["Floor Verification Workflow<br/>workflow.js"]
+
+    Phaser["Phaser 3.90.0 Floor Scene<br/>phaser-floor.js"]
+
+    Floor["Floor Metadata / DOM Fallback / i18n<br/>floor.js"]
+
+    Incidents["Incident Catalog<br/>incidents.js"]
+
+    Analytics["Analytics / RCA / Metrics<br/>analytics.js"]
+
+    Storage["Archive / Schema Validation<br/>storage.js"]
+
+    LocalStorage["Browser LocalStorage"]
+
+    Assets["ops-front-v2<br/>Environment / Rack / Equipment / Operator"]
+
+    UI --> Engine
+    Engine --> Workflow
+    Engine <--> Phaser
+    Floor --> Engine
+    Floor --> Phaser
+    Assets --> Phaser
+    Incidents --> Engine
+    Engine --> Analytics
+    Engine --> Storage
+    Storage --> LocalStorage
+```
+
+Phaser는 이동, Animation, Collision, Depth와 Interaction을 담당합니다.
+
+`app.js`는 Shift, Incident, Terminal, Diagnosis, Recovery, Verification, SLA, Score 등 게임 전체 상태의 Source of Truth 역할을 유지합니다.
+
+`workflow.js`는 Floor Mode의 Recovery Verification 상태 판정을 위한 Helper를 담당합니다.
+
+---
+
+# AWS Deployment Architecture
+
+현재 공개 Production은 **v1.0 Stable**입니다.
+
+```mermaid
+flowchart LR
+
+    Browser["Browser"]
+        -->|"HTTPS"| CloudFront["Amazon CloudFront"]
+
+    CloudFront
+        -->|"OAC + SigV4"| S3["Private Amazon S3"]
+
+    Actions["GitHub Actions"]
+        -->|"OIDC Temporary Credentials"| Role["Least-Privilege IAM Role"]
+
+    Role --> S3
+    Role --> CloudFront
+```
+
+AWS는 Application Backend가 아니라 정적 Frontend를 전달하는 Hosting 계층으로만 사용합니다.
+
+Production Deploy는 `main` Branch의 수동 Workflow에서만 수행됩니다.
+
+현재 v1.1 Floor Mode는 Development Branch에서 작업 중이며 아직 Production에 배포하지 않았습니다.
+
+---
+
+# Project Structure
+
+```text
+dc-ops-simulator/
+│
+├── .github/
+│   └── workflows/
+│       ├── ci.yml
+│       └── deploy.yml
+│
+├── assets/
+│   └── v1.1/
+│       ├── environment/
+│       ├── equipment/
+│       ├── operators/
+│       ├── racks/
+│       ├── source/
+│       └── ops-front-v2/
+│           ├── equipment/
+│           ├── operators/
+│           └── racks/
+│
+├── docs/
+│   └── DEPLOYMENT.md
+│
+├── infra/
+│   ├── cloudformation.yml
+│   └── github-oidc.yml
+│
+├── scripts/
+│   ├── vendor-phaser.js
+│   └── build-ops-front-v2-assets.py
+│
+├── tests/
+│   └── run-tests.js
+│
+├── vendor/
+│   ├── phaser.min.js
+│   └── PHASER_LICENSE.md
+│
+├── analytics.js
+├── app.js
+├── floor.js
+├── incidents.js
+├── phaser-floor.js
+├── workflow.js
+├── storage.js
+│
+├── index.html
+├── styles.css
+│
+├── package.json
+├── package-lock.json
+│
+├── PROJECT_STATUS.md
+├── README.md
+└── THIRD_PARTY_NOTICES.md
+```
+
+## 주요 파일
+
+| File | Role |
+| --- | --- |
+| `app.js` | Shift, Incident, SLA, Score, Terminal, Diagnosis, Recovery 및 Phaser Bridge |
+| `phaser-floor.js` | Phaser Floor Scene, Movement, Collision, Depth, Interaction |
+| `floor.js` | Floor Metadata, DOM Fallback, i18n |
+| `workflow.js` | Floor Mode Verification State Helper |
+| `incidents.js` | Incident Catalog 및 Validation |
+| `analytics.js` | RCA, Metrics, Score, Comparison |
+| `storage.js` | LocalStorage Archive 및 Schema Validation |
+| `index.html` | Dashboard, Floor HUD 및 Scene Popup Structure |
+| `styles.css` | Scene, Popup, Responsive UI |
+| `tests/run-tests.js` | Automated Regression Tests |
+| `scripts/build-ops-front-v2-assets.py` | ops-front-v2 Asset 생성 및 정규화 |
+
+---
+
+# Automated Testing
+
+Regression Test는 Node.js Built-in Assertion을 중심으로 구성했습니다.
+
+현재 v1.1 Branch:
+
+```text
+59 passed
+```
+
+주요 검사 대상:
+
+- Incident Catalog Validation
+- Difficulty Pool
+- Score Rule
+- SLA Logic
+- Terminal Command Classification
+- Evidence Collection
+- Diagnosis Workflow
+- Recovery Workflow
+- Verification Pending State
+- Verification Command 판정
+- Incident Resolve
+- Incident History
+- RCA
+- LocalStorage Archive
+- Floor Metadata
+- Phaser Movement Intent
+- Collision Metadata
+- Player Foot Anchor
+- Rack Interaction
+- Terminal History
+- Dashboard Compatibility
+- DOM Fallback
+
+실행:
+
+```bash
+npm run check
+npm test
+```
+
+최근 Floor Mode Regression 결과:
+
+```text
+Automated Tests: 59 passed
+Browser Console Error: 0
+Broken Image: 0
+git diff --check: PASS
+```
+
+---
+
+# v1.1 Development Highlights
+
+## 1. DOM Floor Prototype
+
+초기 Floor Mode는 HTML / CSS 기반 Grid Movement 구조였습니다.
+
+하지만 이동이 Tile 단위로 끊기고 Visual Depth와 Collision 표현에 한계가 있었습니다.
+
+---
+
+## 2. Phaser Migration
+
+중앙 Floor Scene을 Phaser Canvas로 이전했습니다.
+
+이를 통해 다음 기능을 구현했습니다.
+
+- Held-key Continuous Movement
+- Physics Collision
+- 4-direction Animation
+- Y-depth
+- Interaction Distance
+- Player Foot Anchor 기반 Collision
+
+기존 Incident / Terminal / Archive 시스템은 JavaScript / DOM 구조를 유지하여 v1.0의 안정된 게임 로직을 최대한 재사용했습니다.
+
+---
+
+## 3. Visual Asset Redesign
+
+초기 Rack과 Equipment Asset은 3/4 Perspective 형태였지만 Floor Scene과 시각적으로 맞지 않았습니다.
+
+이후 주요 설비를 정면 형태의 `ops-front-v2` Asset으로 재구성했습니다.
+
+Operator도 4-direction / 4-frame Walk 구조로 개선했습니다.
+
+Visual Sprite와 Collision Footprint를 별도 Metadata로 관리하여 화면 표현과 Physics를 분리했습니다.
+
+---
+
+## 4. UI Simplification
+
+초기 Floor Mode에는 다음 Panel이 동시에 표시되었습니다.
+
+- Controls
+- Operator Selection
+- Mini Map
+- Persistent Terminal
+- Objectives
+- Active Incident Column
+- Bottom Dashboard
+
+이 구조는 게임 화면을 좁게 만들고 기존 Dashboard와 비슷한 인상을 주었습니다.
+
+이를 개선하기 위해 필요한 기능만 Scene Popup으로 표시하도록 UI를 재설계했습니다.
+
+---
+
+## 5. Full-height Floor Scene
+
+Permanent Incident Column과 Bottom Status 영역을 제거하면서 Floor Scene이 Desktop Viewport 대부분을 사용하도록 변경했습니다.
+
+1920×1080 환경에서 Scene Wrapper를 대폭 확장해 Data Center Floor가 화면의 중심이 되도록 구성했습니다.
+
+Phaser Logical World `1440×640`은 유지하여 기존 Position / Collision Metadata와 Gameplay 좌표는 변경하지 않았습니다.
+
+---
+
+## 6. Terminal Session Improvements
+
+Rack별 Terminal Session을 분리했습니다.
+
+```text
+R01 History
+R02 History
+R03 History
+...
+```
+
+Rack 이동 후 다시 돌아와도 이전 조사 기록이 유지됩니다.
+
+Terminal Popup Open, Rack 전환, History Restore, 새 Output 이후에는 최신 Output을 보여주도록 Scroll Logic을 개선했습니다.
+
+사용자가 직접 이전 Output을 확인하는 동안에는 일반 UI Update가 Scroll Position을 강제로 변경하지 않습니다.
+
+---
+
+## 7. Scene Popup Architecture
+
+Terminal, Objectives와 Active Incident를 고정 Panel이 아니라 Scene Popup으로 변경했습니다.
+
+이후 같은 Popup Manager에 Diagnosis와 Recovery를 연결해 Floor Mode 전체 Workflow를 한 화면 안에서 처리하도록 확장했습니다.
+
+```text
+none
+terminal
+objectives
+incident
+diagnosis
+recovery
+```
+
+Popup 간 상태는 상호 배타적으로 관리합니다.
+
+---
+
+## 8. Complete Incident Response Workflow
+
+Floor Mode 안에서 전체 Incident Response Lifecycle을 완료할 수 있도록 다음 Workflow를 구현했습니다.
+
+```text
+Evidence
+→ Diagnosis
+→ Recovery
+→ Verification
+→ Resolve
+```
+
+이제 사용자가 장애를 해결하기 위해 기존 v1.0 Dashboard로 이동할 필요가 없습니다.
+
+특히 Recovery Action 정답 직후 Incident를 끝내지 않고, Terminal에서 정상 상태를 다시 확인하게 만들어 실제 운영 절차에 가까운 Training Flow를 구성했습니다.
+
+---
+
+# Local Development
+
+별도 Build 과정 없이 정적 파일로 실행할 수 있습니다.
+
+권장:
+
+```bash
+python -m http.server 8000
+```
+
+브라우저:
+
+```text
+http://localhost:8000
+```
+
+---
+
+# Tech Stack
+
+## Frontend
+
+- Semantic HTML
+- Responsive CSS
+- Vanilla JavaScript
+- Phaser `3.90.0`
+
+## Data
+
+- Browser LocalStorage
+
+## Testing
+
+- Node.js Built-in Assertion
+- Browser Regression Testing
+
+## CI / Deployment
+
+- Git
+- GitHub
+- GitHub Actions
+- AWS CloudFormation
+- Amazon S3
+- Amazon CloudFront
+- Origin Access Control
+- GitHub OIDC IAM Role
+
+---
+
+# Simulation Scope
+
+Terminal은 실제 Shell이 아니라 Allowlist 기반 **Safe Simulated Terminal**입니다.
+
+입력한 Command는 운영체제로 전달되지 않습니다.
+
+Simulation에서는 다음과 같은 실제 시스템 기능 전체를 구현하지 않습니다.
+
+- 실제 Process Table
+- 실제 DNS Resolver
+- 실제 Network Stack
+- 실제 Filesystem
+- 실제 Permission
+- Pipe
+- Redirect
+- Shell Script
+- 전체 Linux Command Option
+
+Terminal Output은 Incident Response Workflow를 학습하기 위한 Simulation Data입니다.
+
+---
+
+# Current Limitations
+
+- 실제 Linux Shell이 아닌 Allowlist 기반 Simulation입니다.
+- 실제 데이터센터 Monitoring System과 연결되지 않습니다.
+- 실행 중인 Shift는 Browser Refresh 후 복원되지 않습니다.
+- Shift Archive는 Browser LocalStorage에 저장됩니다.
+- 기기 간 Archive 동기화를 지원하지 않습니다.
+- v1.1 Floor Gameplay는 현재 R01~R06 중심으로 연결되어 있습니다.
+- R07~R10 Incident Gameplay는 아직 확장 예정입니다.
+- UPS / PDU / CRAC Facility Scenario는 아직 확장 예정입니다.
+- Verification은 현재 기존 Incident Evidence 정보를 이용해 최소 검증 조건을 생성합니다.
+- Incident별 명시적인 다중 Verification Rule은 후속 개선 범위입니다.
+- Mobile Viewport 적합성은 유지하지만 Touch Movement UI는 아직 구현하지 않았습니다.
+- Phaser Logical World의 Aspect Ratio 때문에 세로 비율이 큰 Viewport에서는 Letterboxing이 발생할 수 있습니다.
+- v1.1은 아직 Production Release가 아닌 Preview 상태입니다.
+
+---
+
+# Next Steps
+
+v1.1 후속 개발 범위:
+
+- Incident별 명시적 Verification Command 정의
+- R07~R10 Incident Gameplay 확장
+- UPS / PDU / CRAC Facility Interaction
+- Terminal Command Simulation 확대
+- Environment Visual Polish
+- Lighting / Shadow Polish
+- Incident별 Verification Result 다양화
+- Mobile Touch Interaction 검토
+- 전체 v1.1 Regression
+- README / Project Status / Development Log 지속 관리
+- `feature/v1.1-floor-mode → main` Pull Request
+- v1.1 Production Release
+
+---
+
+# Version Status
+
+```text
+Production
+└─ v1.0 Stable
+
+Development
+└─ v1.1 Floor Mode Preview
+
+Branch
+└─ feature/v1.1-floor-mode
+```
+
+---
+
+# Version History
 
 - `v0.7` — Expanded Incident Catalog & Category System
 - `v0.8` — Incident History & RCA Analytics System
 - `v0.9` — Persistent Shift Archive & Operations Records
 - `v0.10` — Production Readiness & Portfolio Polish
 - `v1.0` — AWS Deployment & Portfolio Release
-- `v1.1` — 2D Data Center Floor Mode (planning + scaffold, unreleased)
+- `v1.1` — Phaser-based Data Center Floor Mode, in development
 
-상세 구현 상태와 Known Issues, 검증 결과는 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)에서 확인할 수 있습니다.
+---
+
+# License / Third-party
+
+Phaser `3.90.0`은 MIT License를 따릅니다.
+
+관련 License와 Attribution은 다음 파일에서 확인할 수 있습니다.
+
+```text
+vendor/PHASER_LICENSE.md
+THIRD_PARTY_NOTICES.md
+```
+
+본 프로젝트의 Data Center UI, Game Logic과 Project-specific Asset은 Portfolio 및 학습 목적으로 제작되었습니다.
+
+---
+
+상세 구현 상태와 Known Issues는 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)에서 확인할 수 있습니다.
