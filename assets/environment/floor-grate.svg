@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 24" preserveAspectRatio="none" aria-hidden="true">
+  <defs><linearGradient id="g" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#3f5861"/><stop offset=".45" stop-color="#101c21"/><stop offset="1" stop-color="#050a0d"/></linearGradient></defs>
+  <rect x="1" y="1" width="398" height="22" rx="2" fill="#071014" stroke="#526d77" stroke-width="2"/>
+  <g fill="url(#g)"><path d="M6 4h7v16H6zM18 4h7v16h-7zM30 4h7v16h-7zM42 4h7v16h-7zM54 4h7v16h-7zM66 4h7v16h-7zM78 4h7v16h-7zM90 4h7v16h-7zM102 4h7v16h-7zM114 4h7v16h-7zM126 4h7v16h-7zM138 4h7v16h-7zM150 4h7v16h-7zM162 4h7v16h-7zM174 4h7v16h-7zM186 4h7v16h-7zM198 4h7v16h-7zM210 4h7v16h-7zM222 4h7v16h-7zM234 4h7v16h-7zM246 4h7v16h-7zM258 4h7v16h-7zM270 4h7v16h-7zM282 4h7v16h-7zM294 4h7v16h-7zM306 4h7v16h-7zM318 4h7v16h-7zM330 4h7v16h-7zM342 4h7v16h-7zM354 4h7v16h-7zM366 4h7v16h-7zM378 4h7v16h-7zM390 4h4v16h-4z"/></g>
+  <path d="M4 5h392" stroke="#a9c3ca" stroke-opacity=".17"/>
+</svg>

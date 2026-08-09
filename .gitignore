@@ -5,3 +5,6 @@ node_modules/
 Thumbs.db
 Desktop.ini
 npm-debug.log*
+
+# Local visual targets used during development; not redistributed with the project.
+docs/reference/

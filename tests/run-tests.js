@@ -6,6 +6,8 @@ const path = require("node:path");
 const vm = require("node:vm");
 const Analytics = require("../analytics.js");
 const Storage = require("../storage.js");
+const Floor = require("../floor.js");
+const PhaserFloor = require("../phaser-floor.js");
 
 let checks = 0;
 function test(name, callback) {
@@ -246,6 +248,116 @@ test("Current Shift reset data does not clear the storage adapter", () => {
   const currentShift = { history: [1], score: 100 };
   currentShift.history = []; currentShift.score = 0;
   assert.equal(Storage.loadArchive(adapter).shifts.length, 1);
+});
+
+test("2D Floor defines ten unique Racks and four facility assets", () => {
+  const racksOnFloor = Floor.FLOOR_ASSETS.filter((asset) => asset.type === "rack");
+  const facilities = Floor.FLOOR_ASSETS.filter((asset) => asset.type === "facility");
+  assert.equal(racksOnFloor.length, 10);
+  assert.equal(new Set(racksOnFloor.map((asset) => asset.label)).size, 10);
+  assert.deepEqual(facilities.map((asset) => asset.label).sort(), ["CRAC", "PDU-A", "PDU-B", "UPS"]);
+});
+test("2D Floor movement updates position and facing on an open tile", () => {
+  assert.deepEqual(Floor.movePlayer({ x: 6, y: 7, facing: "north" }, "ArrowRight"), { x: 7, y: 7, facing: "east" });
+});
+test("2D Floor movement respects grid bounds and blocking assets", () => {
+  assert.deepEqual(Floor.movePlayer({ x: 1, y: 1, facing: "south" }, "ArrowLeft"), { x: 1, y: 1, facing: "west" });
+  assert.deepEqual(Floor.movePlayer({ x: 3, y: 4, facing: "south" }, "ArrowUp"), { x: 3, y: 4, facing: "north" });
+});
+
+test("2D Floor blocks every Rack and facility from an adjacent logical tile", () => {
+  const approaches = [
+    { dx: -1, dy: 0, key: "ArrowRight" },
+    { dx: 1, dy: 0, key: "ArrowLeft" },
+    { dx: 0, dy: -1, key: "ArrowDown" },
+    { dx: 0, dy: 1, key: "ArrowUp" }
+  ];
+  Floor.FLOOR_ASSETS.forEach((asset) => {
+    const approach = approaches.find(({ dx, dy }) => {
+      const position = { x: asset.x + dx, y: asset.y + dy };
+      return Floor.isInsideGrid(position) && !Floor.isBlocked(position);
+    });
+    assert.ok(approach, `${asset.label} needs a reachable adjacent test tile`);
+    const start = { x: asset.x + approach.dx, y: asset.y + approach.dy, facing: "south" };
+    const result = Floor.movePlayer(start, approach.key);
+    assert.equal(result.x, start.x, `${asset.label} must block horizontal movement`);
+    assert.equal(result.y, start.y, `${asset.label} must block vertical movement`);
+  });
+});
+
+test("2D Floor blocks all four room boundaries while preserving last facing", () => {
+  assert.deepEqual(Floor.movePlayer({ x: 1, y: 1, facing: "south" }, "ArrowUp"), { x: 1, y: 1, facing: "north" });
+  assert.deepEqual(Floor.movePlayer({ x: 1, y: 8, facing: "north" }, "ArrowDown"), { x: 1, y: 8, facing: "south" });
+  assert.deepEqual(Floor.movePlayer({ x: 1, y: 1, facing: "south" }, "ArrowLeft"), { x: 1, y: 1, facing: "west" });
+  assert.deepEqual(Floor.movePlayer({ x: 12, y: 1, facing: "south" }, "ArrowRight"), { x: 12, y: 1, facing: "east" });
+});
+test("2D Floor interaction requires orthogonal adjacency", () => {
+  assert.equal(Floor.findNearbyAsset({ x: 3, y: 4 })?.label, "R01");
+  assert.equal(Floor.findNearbyAsset({ x: 6, y: 7 }), null);
+});
+test("2D Floor exposes Korean and English operator labels", () => {
+  assert.equal(Floor.translate("en", "operatorLunaName"), "Luna Engineer");
+  assert.equal(Floor.translate("ko", "operational"), "OPERATIONS LINKED");
+  assert.equal(Floor.OPERATORS.every((operator) => !Object.hasOwn(operator, "assetUrl")), true);
+});
+
+test("Phaser Floor movement intent is continuous but never diagonal", () => {
+  assert.deepEqual(
+    PhaserFloor.getMovementIntent({ north: true, east: true }, "east"),
+    { x: 1, y: 0, direction: "east", moving: true }
+  );
+  assert.deepEqual(
+    PhaserFloor.getMovementIntent({}, "west"),
+    { x: 0, y: 0, direction: "west", moving: false }
+  );
+});
+
+test("Phaser Floor defines all 12 operator animation textures", () => {
+  assert.equal(PhaserFloor.OPERATOR_TEXTURES.length, 12);
+  assert.equal(new Set(PhaserFloor.OPERATOR_TEXTURES).size, 12);
+});
+
+test("Phaser Floor layout preserves every Rack and facility", () => {
+  const layout = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS);
+  assert.equal(layout.length, Floor.FLOOR_ASSETS.length);
+  assert.equal(layout.filter((asset) => asset.type === "rack").length, 10);
+  assert.equal(layout.every((asset) => asset.collision.width < asset.displayWidth), true);
+  assert.equal(layout.every((asset) => asset.interactionZone.width > asset.collision.width), true);
+  assert.equal(layout.every((asset) => asset.depthPivotY === asset.footY), true);
+});
+
+test("Phaser Floor collision metadata follows each asset base", () => {
+  const layout = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS);
+  const rack = layout.find((asset) => asset.id === "rack-1");
+  const ups = layout.find((asset) => asset.id === "ups-a");
+  const pdu = layout.find((asset) => asset.id === "pdu-a");
+  const crac = layout.find((asset) => asset.id === "crac-a");
+  assert.equal(rack.collision.width / rack.displayWidth > 0.7, true);
+  assert.equal(rack.collision.width / rack.displayWidth < 0.85, true);
+  assert.deepEqual(
+    [rack.collision.width, rack.collision.height, ups.collision.width, pdu.collision.width, crac.collision.width],
+    [96, 40, 108, 86, 120]
+  );
+  assert.equal(layout.every((asset) => asset.collision.y + asset.collision.height / 2 === asset.footY - 4), true);
+});
+
+test("Phaser Floor interaction zones are independent from collision bodies", () => {
+  const rack = PhaserFloor.buildSceneLayout(Floor.FLOOR_ASSETS).find((asset) => asset.id === "rack-3");
+  assert.equal(PhaserFloor.isPointInInteractionZone(rack, { x: rack.x, y: rack.footY + 68 }), true);
+  assert.equal(PhaserFloor.isPointInInteractionZone(rack, { x: rack.x, y: rack.footY + 80 }), false);
+});
+
+test("Phaser Floor depth and player body use floor contact metadata", () => {
+  assert.deepEqual(PhaserFloor.PLAYER_COLLISION, { width: 34, height: 20, offsetX: 0, offsetY: 0 });
+  assert.deepEqual(PhaserFloor.getPlayerFootPosition({ x: 720, y: 360 }), { x: 720, y: 370 });
+  assert.equal(PhaserFloor.depthFromFootY(420) > PhaserFloor.depthFromFootY(300), true);
+});
+
+test("Phaser Floor mini map position follows continuous world coordinates", () => {
+  assert.deepEqual(
+    PhaserFloor.worldToMiniMap({ x: PhaserFloor.WORLD_WIDTH / 2, y: PhaserFloor.WORLD_HEIGHT / 4 }),
+    { xPercent: 50, yPercent: 25 }
+  );
 });
 
 process.stdout.write(`\n${checks} automated checks passed.\n`);

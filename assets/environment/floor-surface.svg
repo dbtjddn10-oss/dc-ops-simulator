@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" preserveAspectRatio="none" aria-hidden="true">
+  <defs>
+    <linearGradient id="floor" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#152b34"/><stop offset=".32" stop-color="#0d2028"/><stop offset="1" stop-color="#071218"/></linearGradient>
+    <radialGradient id="light"><stop stop-color="#73b7bd" stop-opacity=".13"/><stop offset="1" stop-color="#73b7bd" stop-opacity="0"/></radialGradient>
+    <filter id="blur"><feGaussianBlur stdDeviation="12"/></filter>
+  </defs>
+  <path d="M59 145h1082l16 458H43z" fill="url(#floor)" stroke="#3b5863" stroke-width="3"/>
+  <ellipse cx="600" cy="260" rx="430" ry="170" fill="url(#light)" filter="url(#blur)"/>
+  <g fill="none" stroke="#42616c" stroke-opacity=".29" stroke-width="2">
+    <path d="M59 145h1082M57 202h1086M55 267h1090M52 341h1096M49 426h1102M46 523h1108M43 603h1114"/>
+    <path d="m155 145-48 458M304 145l-28 458M452 145l-10 458M600 145v458M748 145l10 458M896 145l28 458M1045 145l48 458"/>
+  </g>
+  <g fill="#09161c" stroke="#34515c" stroke-width="2">
+    <path d="M219 324h760l5 27H216z"/><path d="M198 493h804l8 30H190z"/>
+  </g>
+  <g stroke="#536f78" stroke-opacity=".58">
+    <path d="M232 329h735M207 499h784" stroke-width="2"/>
+    <path d="M248 326v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23m24-23v23"/>
+  </g>
+  <g fill="#0a171d" stroke="#2d4650">
+    <path d="M96 170h100v104H85z"/><path d="M1005 172h102l8 110h-100z"/>
+    <path d="M276 177h110v44H273zM445 177h110v44H444zM614 177h110v44H615zM783 177h110v44H786z" opacity=".45"/>
+    <path d="M258 403h120v48H254zM429 403h120v48H427zM600 403h120v48H601zM771 403h120v48H775z" opacity=".45"/>
+  </g>
+  <g fill="none" stroke="#aa8335" stroke-opacity=".45" stroke-width="4"><path d="M71 185 48 571"/><path d="m1128 184 26 387"/></g>
+  <path d="M70 583h1060" stroke="#6a919d" stroke-opacity=".22"/><ellipse cx="600" cy="580" rx="480" ry="24" fill="#000" opacity=".2"/>
+</svg>

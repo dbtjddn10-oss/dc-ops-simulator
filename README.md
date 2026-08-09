@@ -6,7 +6,7 @@
 
 이 프로젝트는 교육 및 Portfolio 목적의 Simulation입니다. 실제 데이터센터 인프라나 Monitoring System에 연결되지 않으며, 실제 Linux Shell 명령을 실행하지 않습니다.
 
-**Live Demo:** [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
+**Live Demo (v1.0 stable):** [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
 
 ## 프로젝트 개요 (Overview)
 
@@ -57,9 +57,16 @@ Hard Mode에서는 필요한 수의 유효한 Evidence를 확보해야 Diagnosis
 - SLA Compliance, MTTR, Accuracy, Investigation Coverage, Category Performance 분석
 - LocalStorage 기반 Shift Archive, Filter, Previous Shift Comparison, Personal Best
 - Archive Record 개별 삭제와 전체 삭제
-- 외부 dependency 없이 실행되는 automated regression test
+- Node.js built-in assertion을 사용하는 automated regression test
 - GitHub Actions 기반 syntax check와 CI
 - Desktop과 mobile breakpoint를 고려한 Responsive 구조
+- v1.1 preview: R01~R10과 UPS / PDU-A / PDU-B / CRAC를 배치한 game-focused 2D Floor scaffold
+- v1.1 preview PHASE 1: 중앙 Floor Scene을 Phaser 3.90.0 Canvas로 렌더링하고 연속 방향키 이동, footprint 충돌, y-depth, 인접 Rack의 E 상호작용을 적용
+- v1.1 preview: Game Asset Pass 2 — metallic room/floor illustration과 상태별 Rack·UPS·PDU·CRAC를 25개 original SVG file asset으로 분리
+- v1.1 preview: 1440×640 logical scene에 맞춘 original Environment Clean Plate PNG를 Phaser background로 사용
+- v1.1 preview: 동일한 foot anchor를 사용하는 4-direction idle + 2-frame walk 구성의 original Operator sprite
+- v1.1 preview: keyboard key 형태의 Controls, console형 Terminal, 설비 상태를 구분하는 mini map과 정보 밀도를 높인 Incident HUD
+- v1.1 preview: 기본 scene-first 화면과 메뉴로 복귀 가능한 기존 v1.0 Dashboard
 
 Responsive 구조와 정확한 375×812 Device Emulation을 실제 CloudFront 환경에서 검증했습니다. Dashboard, Terminal, Incident History와 Shift Archive에서 수평 overflow나 console error가 발생하지 않았습니다.
 
@@ -77,7 +84,11 @@ Responsive 구조와 정확한 375×812 Device Emulation을 실제 CloudFront �
 
 ```mermaid
 flowchart TD
-    UI["Browser UI<br/>index.html + styles.css"] --> Engine["Game engine and UI orchestration<br/>app.js"]
+    UI["DOM HUD and v1.0 Dashboard<br/>index.html + styles.css"] --> Engine["Shift, Incident and UI source of truth<br/>app.js"]
+    Assets["Original 2D game assets<br/>environment + equipment + operator + UI SVG"] --> Phaser["Phaser 3.90.0 Canvas Floor Scene<br/>phaser-floor.js"]
+    Floor["Floor metadata, legacy fallback and i18n<br/>floor.js"] --> Engine
+    Floor --> Phaser
+    Engine <-->|"Rack state / player position / interaction bridge"| Phaser
     Catalog["Validated incident catalog<br/>incidents.js"] --> Engine
     Engine --> Analytics["Pure analytics and game-rule helpers<br/>analytics.js"]
     Engine --> Storage["Archive validation and CRUD<br/>storage.js"]
@@ -85,6 +96,7 @@ flowchart TD
     Tests["Dependency-free Node regression tests"] --> Catalog
     Tests --> Analytics
     Tests --> Storage
+    Tests --> Floor
 ```
 
 배포 구조는 다음과 같습니다.
@@ -108,6 +120,11 @@ dc-ops-simulator/
 │   └── workflows/
 │       ├── ci.yml
 │       └── deploy.yml
+├── assets/
+│   ├── environment/
+│   ├── equipment/
+│   ├── operators/operator-a/
+│   └── ui/
 ├── docs/
 │   └── DEPLOYMENT.md
 ├── infra/
@@ -115,24 +132,38 @@ dc-ops-simulator/
 │   └── github-oidc.yml
 ├── tests/
 │   └── run-tests.js
+├── scripts/
+│   └── vendor-phaser.js
+├── vendor/
+│   ├── phaser.min.js
+│   └── PHASER_LICENSE.md
 ├── .gitattributes
 ├── .gitignore
 ├── analytics.js
 ├── app.js
+├── floor.js
+├── phaser-floor.js
 ├── incidents.js
 ├── index.html
+├── package-lock.json
 ├── package.json
 ├── PROJECT_STATUS.md
 ├── README.md
 ├── storage.js
-└── styles.css
+├── styles.css
+└── THIRD_PARTY_NOTICES.md
 ```
 
 | 파일 | 역할 |
 | --- | --- |
-| `index.html` | Dashboard, Terminal, History, Archive, Shift Report UI 구조 |
-| `styles.css` | Dark NOC Style, 상태 표현, Modal과 Responsive Layout |
-| `app.js` | Shift 진행, Incident 대응, Terminal과 전체 UI orchestration |
+| `index.html` | Dashboard, 2D Floor, Terminal, History, Archive, Shift Report UI 구조 |
+| `styles.css` | Dark NOC Style, 2D Floor, 상태 표현, Modal과 Responsive Layout |
+| `assets/` | Room/Floor, Rack·설비, warning UI와 12-frame Operator로 구성된 original SVG game asset |
+| `app.js` | Shift, Incident, SLA, Score, Terminal, Archive와 DOM HUD의 source of truth 및 Phaser bridge |
+| `floor.js` | Floor metadata, legacy DOM 이동·충돌·근접 판정, Operator와 i18n dictionary |
+| `phaser-floor.js` | Canvas Scene, 4방향 연속 이동·animation, footprint collision, y-depth와 E interaction |
+| `vendor/` | CDN 없이 로드하는 Phaser 3.90.0 browser build와 MIT license 원문 |
+| `scripts/vendor-phaser.js` | exact npm dependency에서 Phaser browser build와 license를 복사하는 vendor script |
 | `incidents.js` | 15종 Incident Catalog와 데이터 validation |
 | `analytics.js` | RCA, Shift Analytics, Score rule, Comparison과 Personal Best 계산 |
 | `storage.js` | LocalStorage schema validation과 Shift Archive CRUD |
@@ -146,19 +177,20 @@ dc-ops-simulator/
 
 ## Testing
 
-Test Runner는 Node.js built-in module만 사용하므로 별도의 package 설치가 필요하지 않습니다. 현재 **36 automated checks**가 Catalog, 게임 규칙, Analytics, RCA와 Archive regression을 검증합니다.
+Test Runner 자체는 Node.js built-in module을 사용합니다. 현재 **50 automated checks**가 Catalog, 게임 규칙, Analytics, RCA, Archive, legacy Floor helper와 Phaser Floor의 이동 intent·layout·collision metadata·mini map mapping을 검증합니다.
 
 ```bash
 npm test
 npm run check
 ```
 
-- `npm test`: 36개 automated checks 실행
-- `npm run check`: `app.js`, `incidents.js`, `analytics.js`, `storage.js`, `tests/run-tests.js` syntax 검사
+- `npm test`: 50개 automated checks 실행
+- `npm run check`: 기존 JavaScript와 `phaser-floor.js`, vendor script, test runner syntax 검사
+- `npm run vendor:phaser`: exact dependency `phaser@3.90.0`의 browser build와 MIT license를 `vendor/`에 재생성
 
-GitHub Actions CI는 `main` push와 Pull Request에서 두 명령을 자동으로 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용하며 외부 dependency 설치가 필요하지 않습니다.
+GitHub Actions CI는 `main` push와 Pull Request에서 check와 test를 실행합니다. 현재 CI는 Ubuntu Runner와 **Node.js 24 LTS**를 사용합니다. v1.1 branch의 Phaser 파일은 아직 production deploy artifact에 포함하지 않았습니다.
 
-별도의 AWS Deploy Workflow는 `main`의 `workflow_dispatch` 실행만 허용합니다. 같은 syntax check와 36개 test가 모두 성공한 뒤 GitHub OIDC 임시 credential로 Private S3에 6개 정적 파일을 배포하고 CloudFront cache invalidation과 공개 endpoint Smoke Test를 수행합니다. 장기 AWS Access Key는 GitHub에 저장하지 않습니다. 자세한 구조와 운영 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
+별도의 v1.0 AWS Deploy Workflow는 `main`의 `workflow_dispatch` 실행만 허용합니다. 36개 production regression check가 모두 성공한 뒤 GitHub OIDC 임시 credential로 Private S3에 6개 정적 파일을 배포하고 CloudFront cache invalidation과 공개 endpoint Smoke Test를 수행합니다. v1.1 preview 파일은 아직 production artifact에 포함하지 않습니다. 장기 AWS Access Key는 GitHub에 저장하지 않습니다. 자세한 구조와 운영 절차는 [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)를 참고합니다.
 
 주요 테스트 범위:
 
@@ -169,6 +201,8 @@ GitHub Actions CI는 `main` push와 Pull Request에서 두 명령을 자동으�
 - LocalStorage schema와 손상 데이터 fallback
 - Shift Snapshot, Archive CRUD와 최대 50개 제한
 - Previous Shift Comparison과 Personal Best
+- 2D Floor layout, 경계·충돌 이동과 인접 상호작용 판정
+- Phaser Floor의 4방향 단일 movement intent, 12개 animation texture 계약, scene layout과 continuous mini map mapping
 
 ## 로컬 실행 (Run Locally)
 
@@ -191,6 +225,7 @@ http://localhost:8000
 - Semantic HTML
 - Responsive CSS
 - Vanilla JavaScript
+- Phaser `3.90.0` (exact npm dependency, vendored browser build, MIT)
 - Browser LocalStorage
 - Node.js built-in modules
 - GitHub Actions
@@ -229,6 +264,11 @@ ipmitool sensor
 - Background Tab에서는 화면 갱신 timer가 일시 중지될 수 있습니다. 경과 시간 계산은 `Date.now()`를 기준으로 합니다.
 - Incident 간격, SLA, penalty와 grade는 추가 playtest를 통해 조정할 여지가 있습니다.
 - Custom Domain과 ACM Certificate는 구성하지 않았으며 CloudFront 기본 domain을 사용합니다.
+- 2D Floor의 R07~R10과 UPS / PDU-A / PDU-B / CRAC 상호작용은 placeholder이며 아직 Incident Scenario와 연결되지 않습니다.
+- 언어 전환은 v1.1 scaffold의 핵심 UI 문자열부터 적용했으며 기존 v1.0 전체 UI 번역은 범위에 포함하지 않았습니다.
+- Operator는 선택 상태와 player label만 연결되며 능력치나 gameplay 차이는 없습니다.
+- v1.1 preview의 `assets/`는 아직 v1.0 production 배포 artifact에 포함되지 않습니다. Release 단계에서 별도 승인을 거쳐 deploy Workflow의 artifact 범위를 갱신해야 합니다.
+- Phaser PHASE 1은 local development branch에서 검증한 unreleased preview입니다. Canvas scene은 mobile 폭에 맞춰 축소되며 touch control은 아직 제공하지 않습니다.
 
 ## Roadmap
 
@@ -240,6 +280,16 @@ ipmitool sensor
 - 공개 URL에서 Desktop workflow 및 375×812 Device Emulation 검증
 - GitHub Actions CI와 배포 Workflow 모니터링
 
+### v1.1 — 2D Data Center Floor Mode (planning + scaffold)
+
+- R01~R10, UPS / PDU-A / PDU-B / CRAC와 Operator를 표시하는 2D Floor 구조
+- 방향키 이동, 화면 경계·장비 충돌과 인접 Rack E 상호작용
+- R01~R06을 기존 Incident / Terminal / Investigation 흐름에 연결
+- Phaser Canvas의 4방향 continuous movement, 12-frame original SVG Operator animation과 한국어/English dictionary 구조
+- wall·lighting·exit·door·floor tile·aisle grate를 포함한 scene-first room과 file 기반 original SVG Rack/equipment/Operator sprite
+- compact menu, 우측 Incident panel, 하단 Controls/Terminal/Objective/mini map HUD와 v1.0 Dashboard 전환
+- R07~R10 및 설비별 상호작용은 이후 iteration에서 확장
+
 v1.0 이후에도 Simulation 범위를 유지하면서 playtest 기반 SLA/score tuning과 Archive 사용성을 개선할 예정입니다. 실제 Ubuntu 또는 EC2 Lab을 진행하더라도 이 Browser Simulation과는 별도 환경과 문서로 구분합니다.
 
 ## Version History
@@ -249,5 +299,6 @@ v1.0 이후에도 Simulation 범위를 유지하면서 playtest 기반 SLA/score
 - `v0.9` — Persistent Shift Archive & Operations Records
 - `v0.10` — Production Readiness & Portfolio Polish
 - `v1.0` — AWS Deployment & Portfolio Release
+- `v1.1` — 2D Data Center Floor Mode (planning + scaffold, unreleased)
 
 상세 구현 상태와 Known Issues, 검증 결과는 [`PROJECT_STATUS.md`](PROJECT_STATUS.md)에서 확인할 수 있습니다.

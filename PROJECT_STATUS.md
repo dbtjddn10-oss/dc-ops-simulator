@@ -1,9 +1,11 @@
 # DC OPS: NIGHT SHIFT — Project Status
 
 최종 업데이트: 2026-08-09
-현재 버전: **v1.0 — AWS Deployment & Portfolio Release**
+현재 안정 버전: **v1.0 — AWS Deployment & Portfolio Release**
 
-외부 runtime library나 build 과정 없이 브라우저에서 실행되는 데이터센터 Incident 대응 학습용 Simulator다. 실제 Linux Shell, 운영 Monitoring System, backend, database 또는 AWS API와 연결되지 않는다. AWS는 정적 Frontend를 전달하는 Hosting 계층으로만 사용한다.
+현재 개발 상태: **v1.1 — 2D Data Center Floor Mode (planning + scaffold, unreleased)**
+
+Backend, build service 또는 CDN runtime 없이 브라우저에서 실행되는 데이터센터 Incident 대응 학습용 Simulator다. v1.1 preview는 exact dependency `phaser@3.90.0`의 browser build를 repository에 vendor한다. 실제 Linux Shell, 운영 Monitoring System, backend, database 또는 AWS API와 연결되지 않는다. AWS는 정적 Frontend를 전달하는 Hosting 계층으로만 사용한다.
 
 ## 1. v1.0 목표와 결과
 
@@ -37,6 +39,36 @@ Live Demo: [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudf
 - LocalStorage 기반 Shift Archive, Filter, Previous Shift Comparison, Personal Best
 - Archive 개별 삭제, 전체 삭제와 최대 50개 제한
 - Modal focus, Escape, scroll lock과 Responsive layout
+
+v1.1 scaffold 구현:
+
+- R01~R10, UPS / PDU-A / PDU-B / CRAC를 표시하는 12×8 2D Floor
+- player position/facing state와 방향키 이동
+- 화면 경계 및 Rack·설비 tile 충돌
+- 인접 asset 판정과 E 상호작용
+- R01~R06을 기존 Rack selection, Terminal, Investigation 흐름에 연결
+- R07~R10과 설비 상호작용은 `PLANNED` placeholder로 분리
+- 저작권 자산이 없는 오리지널 Operator 선택 UI
+- 한국어/English dictionary와 v1.1 핵심 UI 언어 전환
+- wall panel, lighting, exit door, floor tile·panel, aisle grate, cable run과 equipment contact shadow를 포함한 reference-driven scene-first room 구성
+- `assets/environment/`의 room shell, floor surface, grate, hazard stripe, exit door와 wall light original SVG
+- `assets/v1.1/environment/room-shell-main.png` Environment Clean Plate를 1440×640 logical scene background로 적용
+- `assets/equipment/`의 상태별 Rack과 display·breaker·fan grille를 갖춘 UPS/PDU/CRAC original SVG
+- 동일한 `64×80` viewBox와 foot anchor를 공유하는 4-direction idle 및 방향별 2-frame walk Operator sprite 12개
+- 총 25개 file 기반 SVG game asset, load-failure 시 procedural scene/equipment/player placeholder fallback
+- keyboard key 형태의 Controls, console형 Investigation Terminal, facility state를 구분하는 Data Center mini map과 고밀도 Active Incident HUD
+- 기본 Floor 화면에서 메뉴로 기존 v1.0 Dashboard와 Rack/Queue/Action/Event Log를 다시 펼칠 수 있음
+- PHASE 1에서 중앙 Floor Scene만 Phaser 3.90.0 Canvas로 migration하고 상단/우측/하단 HUD 및 기존 Dashboard는 DOM으로 유지
+- `app.js`는 Shift, Incident, SLA, Score, Terminal, Diagnosis, Recovery, Archive와 Analytics의 source of truth를 계속 담당
+- `app.js → Phaser` Rack/Incident/Operator/언어/Shift state와 `Phaser → app.js` player position/nearby asset/E interaction callback으로 구성한 최소 bridge
+- held key 기반 continuous movement, 4-direction only animation, 단일 `PLAYER_SPEED`와 key release stop
+- equipment 전체 외형이 아닌 floor footprint collision body, room boundary와 foot-centered player physics body
+- asset별 collision/interaction metadata와 foot-centered player physics body를 분리하고 `?debugFloor=1` overlay 제공
+- equipment와 player에 floor contact `footY` 기반 depth 적용
+- Phaser의 실제 continuous player 좌표를 DOM mini map marker에 반영
+- Terminal 또는 form control focus와 Modal/legacy Dashboard 상태에서는 Phaser input을 차단
+- Phaser 또는 SVG load 실패 시 legacy DOM Floor를 유지하며 `?floorRenderer=dom`으로 fallback 회귀 테스트 가능
+- Phaser `3.90.0` exact npm dependency, local `vendor/phaser.min.js`, MIT license 원문과 third-party attribution 포함
 
 ## 3. AWS Architecture
 
@@ -110,7 +142,7 @@ Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marke
 
 ## 6. Automated Tests
 
-`tests/run-tests.js`는 Node.js built-in module만 사용하며 **36개 check**를 포함한다.
+`tests/run-tests.js`는 Node.js built-in module을 사용하며 현재 v1.1 branch에서 **50개 check**를 포함한다.
 
 - Incident Catalog validation과 Category/Difficulty pool
 - MTTR, History filter와 Category Analytics
@@ -121,8 +153,10 @@ Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marke
 - Archive schema/corruption/future-schema 처리
 - Shift Snapshot, ID, CRUD, filter/sort와 최대 50개 제한
 - Previous Shift Comparison과 Personal Best
+- 2D Floor asset 구성, 경계·충돌 이동과 인접 상호작용
+- Phaser Floor 4방향 movement intent, 12개 Operator animation texture 계약, asset별 collision/interaction metadata, footY depth와 continuous mini map mapping
 
-최종 로컬 결과: **36 passed, 0 failed**
+최종 로컬 결과: **50 passed, 0 failed**
 
 ## 7. Public Endpoint 검증
 
@@ -165,6 +199,21 @@ Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marke
 - 의도하지 않은 text clipping 없음
 - console error 0
 
+### v1.1 PHASE 1 Local Browser 검증
+
+- Phaser 3.90.0 Canvas renderer `ready`, 중앙 scene canvas 1개 확인
+- 10초 지속 방향 입력에서 world boundary 밖으로 이동하지 않고 key release 후 좌표가 정지하는지 확인
+- R06 Rack floor footprint 앞에서 collision 및 인접 상태 유지 확인
+- E interaction으로 R06이 기존 Rack selection 및 Safe Simulated Terminal에 연결되는지 확인
+- Terminal focus 중 Arrow key와 E가 player movement/interaction을 발생시키지 않는지 확인
+- English toggle과 Luna Operator 선택이 DOM HUD와 Phaser bridge state에 반영되는지 확인
+- Incident 생성 시 실제 Rack SVG가 critical state로 바뀌고 warning marker가 표시되는지 확인
+- 1440×900에서 scene/HUD 구성과 수평 overflow 없음 확인
+- 375×812에서 Phaser Canvas fit, 수평 overflow 없음 확인
+- clean reload 이후 Phaser asset warning 및 console error 0
+- `?floorRenderer=dom`에서 Canvas 0개, legacy DOM asset 14개 표시 확인
+- reference와 비교해 중앙 Rack 2열, 좌측 전원 설비, 우측 CRAC, scene-first HUD 비율을 유지했으며 고해상도 sprite polish와 mobile touch UX는 후속 범위로 남김
+
 ## 10. Known Issues / Limitations
 
 - 실행 중인 Shift는 페이지 새로고침 후 복구되지 않는다.
@@ -177,6 +226,11 @@ Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marke
 - Incident 간격, SLA, penalty와 grade는 추가 playtest를 통한 tuning 여지가 있다.
 - Custom Domain, Route 53, ACM Certificate, WAF는 구성하지 않았다.
 - CloudFront와 S3 요청, 저장 용량, data transfer와 invalidation 사용량에 따라 AWS 비용이 발생할 수 있다.
+- R07~R10과 UPS / PDU-A / PDU-B / CRAC는 Floor 표시 및 근접 판정만 구현된 placeholder다.
+- v1.1 언어 전환은 새 Floor 핵심 문자열에만 적용되며 기존 v1.0 UI 전체를 번역하지 않는다.
+- Operator 선택은 player label과 시각적 선택 상태만 변경하며 gameplay 차이는 없다.
+- v1.1 `assets/` directory는 아직 v1.0 production deploy artifact 복사 범위에 포함되지 않는다. Release 승인 전에는 Workflow를 변경하지 않으며 v1.1 preview는 local development branch에서만 검증한다.
+- Phaser PHASE 1은 keyboard 기반 Desktop 우선 구현이다. 375×812에서 수평 overflow는 없지만 Canvas가 폭에 맞춰 축소되며 touch control은 아직 없다.
 
 ## 11. Data Safety
 
@@ -192,9 +246,12 @@ Smoke Test는 HTTP 요청 결과를 임시 파일에 저장한 뒤 content marke
 - `v0.9` — Persistent Shift Archive & Operations Records
 - `v0.10` — Production Readiness & Portfolio Polish
 - `v1.0` — AWS Deployment & Portfolio Release
+- `v1.1` — 2D Data Center Floor Mode (planning + scaffold, unreleased)
 
 ## 13. 다음 개선 후보
 
+- R07~R10 및 UPS / PDU-A / PDU-B / CRAC 상호작용 Scenario 연결
+- Floor mode keyboard 접근성, mobile layout과 gameplay playtest
 - playtest 기반 SLA, Incident interval, score와 grade tuning
 - Archive 검색, pagination과 import/export
 - README Operator Walkthrough와 release screenshot 보강

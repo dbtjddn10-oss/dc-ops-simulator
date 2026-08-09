@@ -18,6 +18,7 @@
         </div>
       </div>
       <div class="topbar-status">
+        <button class="return-floor-btn" id="returnFloorViewBtn" type="button" data-i18n="returnFloorLabel">Floor Mode로 돌아가기</button>
         <div class="shift-badge"><span class="pulse-dot" aria-hidden="true"></span><span>NOC ONLINE · NIGHT SHIFT</span></div>
         <span class="version-badge" aria-label="Application version">BUILD <strong id="appVersion">—</strong></span>
       </div>
@@ -26,16 +27,16 @@
     <section class="shift-console" aria-label="야간 교대 현황">
       <div class="shift-console__heading">
         <div>
-          <p class="eyebrow">SHIFT CONTROL</p>
-          <h2>NIGHT SHIFT <span>22:00 → 06:00</span></h2>
-          <div class="difficulty-current">DIFFICULTY <strong id="currentDifficulty">NORMAL</strong></div>
+          <p class="eyebrow" data-i18n="shiftControl">교대 제어</p>
+          <h2><span data-i18n="nightShift">야간 교대</span> <span>22:00 → 06:00</span></h2>
+          <div class="difficulty-current"><span data-i18n="difficultyLabel">난이도</span> <strong id="currentDifficulty">NORMAL</strong></div>
         </div>
         <span class="shift-status idle" id="shiftStatus">IDLE</span>
       </div>
       <div class="shift-clocks">
-        <div><small>SIMULATED TIME</small><strong id="shiftGameTime">22:00</strong></div>
-        <div><small>REAL TIME LEFT</small><strong id="shiftRemaining">03:00</strong></div>
-        <div><small>SLA VIOLATIONS</small><strong id="shiftSlaBreaches">0</strong></div>
+        <div><small data-i18n="shiftTimeLabel">교대 시간</small><strong id="shiftGameTime">22:00</strong></div>
+        <div><small data-i18n="timeLeftLabel">남은 시간</small><strong id="shiftRemaining">03:00</strong></div>
+        <div><small data-i18n="slaViolationsLabel">SLA 위반</small><strong id="shiftSlaBreaches">0</strong></div>
       </div>
       <div class="shift-actions">
         <div class="difficulty-selector" id="difficultySelector" role="group" aria-label="난이도 선택">
@@ -44,8 +45,8 @@
           <button class="difficulty-btn hard" type="button" data-difficulty="HARD" aria-pressed="false">HARD</button>
         </div>
         <small class="difficulty-summary" id="difficultySummary">SLA ×1.00 · SCORE ×1.00 · INVESTIGATION OPTIONAL</small>
-        <button class="history-open-btn" id="historyOpenBtn" type="button">해결 기록 · INCIDENT HISTORY <span id="historyButtonCount">0</span></button>
-        <button class="archive-open-btn" id="archiveOpenBtn" type="button">과거 교대 · SHIFT ARCHIVE <span id="archiveButtonCount">0</span></button>
+        <button class="history-open-btn" id="historyOpenBtn" type="button"><span class="shift-action-label" data-i18n="incidentHistoryLabel">Incident 기록</span> <span id="historyButtonCount">0</span></button>
+        <button class="archive-open-btn" id="archiveOpenBtn" type="button"><span class="shift-action-label" data-i18n="shiftArchiveLabel">Shift Archive</span> <span id="archiveButtonCount">0</span></button>
         <button class="shift-start-btn" id="startShiftBtn" type="button">교대 시작 · START SHIFT</button>
         <button class="shift-end-btn" id="endShiftBtn" type="button" disabled hidden>교대 종료 · END SHIFT</button>
       </div>
@@ -74,6 +75,211 @@
       </article>
     </section>
 
+    <section class="floor-mode" aria-labelledby="floorModeTitle">
+      <header class="floor-mode__header">
+        <div class="floor-mode__identity">
+          <span class="floor-mode__mark" aria-hidden="true"><i></i><i></i><i></i></span>
+          <div>
+            <p class="eyebrow" data-i18n="floorEyebrow">V1.1 PREVIEW · 2D OPERATIONS SCAFFOLD</p>
+            <h2 id="floorModeTitle">DC OPS: NIGHT SHIFT</h2>
+            <p data-i18n="floorTitle">2D 데이터센터 Floor Mode</p>
+          </div>
+        </div>
+        <div class="floor-hud-metrics" aria-label="Floor Mode 주요 상태">
+          <div><small data-i18n="shiftTimeLabel">교대 시간</small><strong id="floorHudTime">22:00</strong></div>
+          <div><small data-i18n="difficultyLabel">난이도</small><strong id="floorHudDifficulty">NORMAL</strong></div>
+          <div><small data-i18n="scoreLabel">점수</small><strong id="floorHudScore">0 PTS</strong></div>
+          <div><small data-i18n="activeIncidentsLabel">진행 중인 장애</small><strong id="floorHudIncidents">0</strong></div>
+        </div>
+        <div class="language-toggle" id="languageToggle" role="group" aria-label="언어 선택">
+          <span data-i18n="languageLabel">언어</span>
+          <button class="language-btn selected" type="button" data-language="ko" aria-pressed="true">한국어</button>
+          <button class="language-btn" type="button" data-language="en" aria-pressed="false">English</button>
+        </div>
+        <nav class="floor-game-menu" aria-label="Floor Mode 메뉴">
+          <button class="floor-game-menu__toggle" id="floorMenuToggleBtn" type="button" aria-expanded="false" aria-controls="floorMenuPanel">
+            <span aria-hidden="true">☰</span><span data-i18n="menuLabel">메뉴</span>
+          </button>
+          <div class="floor-game-menu__panel" id="floorMenuPanel" hidden>
+            <button id="floorStartShiftBtn" type="button"><span data-i18n="startShiftLabel">교대 시작 · START SHIFT</span></button>
+            <button id="floorTriggerIncidentBtn" type="button"><span data-i18n="triggerIncidentLabel">Incident 생성</span></button>
+            <button id="floorHistoryBtn" type="button"><span data-i18n="incidentHistoryLabel">Incident 기록</span></button>
+            <button id="floorArchiveBtn" type="button"><span data-i18n="shiftArchiveLabel">Shift Archive</span></button>
+            <button id="floorDashboardBtn" type="button"><span data-i18n="dashboardLabel">v1.0 Dashboard</span></button>
+          </div>
+        </nav>
+      </header>
+
+      <div class="floor-mode__layout">
+        <div class="floor-stage-wrap">
+          <div class="floor-stage-scroll">
+            <div class="floor-stage" id="floorStage" tabindex="0" aria-label="2D 데이터센터 Floor">
+              <div class="phaser-floor-mount" id="phaserFloorMount" data-phaser-ready="false">
+                <p class="phaser-floor-status" id="phaserFloorStatus" role="status">2D Floor renderer loading…</p>
+              </div>
+              <img class="scene-environment-asset scene-environment-asset--shell" src="assets/environment/room-shell.svg" alt="" aria-hidden="true" draggable="false">
+              <img class="scene-environment-asset scene-environment-asset--floor" src="assets/environment/floor-surface.svg" alt="" aria-hidden="true" draggable="false">
+              <div class="scene-wall scene-wall--north" aria-hidden="true">
+                <span class="scene-exit">EXIT</span>
+                <span class="scene-light scene-light--a"></span>
+                <span class="scene-light scene-light--b"></span>
+                <span class="scene-light scene-light--c"></span>
+              </div>
+              <div class="scene-wall scene-wall--left" aria-hidden="true"></div>
+              <div class="scene-wall scene-wall--right" aria-hidden="true"></div>
+              <div class="scene-wall-vents" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></div>
+              <div class="scene-ceiling-beams" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+              <div class="scene-door" aria-hidden="true"><i></i><span>AUTHORIZED ACCESS</span></div>
+              <div class="scene-warning-stripe" aria-hidden="true"></div>
+              <div class="scene-floor-panels" aria-hidden="true"></div>
+              <div class="scene-cable-run scene-cable-run--power" aria-hidden="true"><i></i><i></i></div>
+              <div class="scene-cable-run scene-cable-run--cooling" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="scene-perimeter-rail" aria-hidden="true"><i></i><i></i><i></i></div>
+              <div class="scene-grate scene-grate--north" aria-hidden="true"></div>
+              <div class="scene-grate scene-grate--south" aria-hidden="true"></div>
+              <div class="scene-aisle-mark scene-aisle-mark--a" aria-hidden="true">COLD AISLE 01</div>
+              <div class="scene-aisle-mark scene-aisle-mark--b" aria-hidden="true">COLD AISLE 02</div>
+              <div class="floor-grid-label floor-grid-label--north">SERVER HALL A · NORTH</div>
+              <div class="floor-assets" id="floorAssets"></div>
+              <div class="floor-player" id="floorPlayer" data-facing="north" data-motion="idle" aria-label="현재 오퍼레이터">
+                <span class="floor-player__visual">
+                  <span class="operator-sprite" aria-hidden="true">
+                    <img class="operator-frame operator-frame--idle-down" src="assets/operators/operator-a/idle-down.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--idle-up" src="assets/operators/operator-a/idle-up.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--idle-left" src="assets/operators/operator-a/idle-left.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--idle-right" src="assets/operators/operator-a/idle-right.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-down-1" src="assets/operators/operator-a/walk-down-1.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-down-2" src="assets/operators/operator-a/walk-down-2.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-up-1" src="assets/operators/operator-a/walk-up-1.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-up-2" src="assets/operators/operator-a/walk-up-2.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-left-1" src="assets/operators/operator-a/walk-left-1.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-left-2" src="assets/operators/operator-a/walk-left-2.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-right-1" src="assets/operators/operator-a/walk-right-1.svg" alt="" draggable="false">
+                    <img class="operator-frame operator-frame--walk-right-2" src="assets/operators/operator-a/walk-right-2.svg" alt="" draggable="false">
+                    <b class="operator-sprite__fallback" id="floorPlayerGlyph">R</b>
+                  </span>
+                </span>
+                <strong id="floorPlayerLabel">루키형 탐험가</strong>
+              </div>
+              <div class="floor-interaction-prompt" id="floorInteractionPrompt" hidden>
+                <kbd>E</kbd><span data-i18n="investigatePrompt">조사하기</span>
+              </div>
+            </div>
+          </div>
+          <div class="floor-controls">
+            <span><kbd>↑ ↓ ← →</kbd> <span data-i18n="movementLabel">이동</span></span>
+            <span><kbd>E</kbd> <span data-i18n="interactionLabel">상호작용</span></span>
+            <strong id="floorInteractionStatus" aria-live="polite">랙 가까이로 이동하세요.</strong>
+          </div>
+        </div>
+
+        <aside class="floor-briefing" aria-labelledby="floorIncidentTitle">
+          <header>
+            <p class="eyebrow">MISSION CONTROL</p>
+            <h3 id="floorIncidentTitle" data-i18n="activeIncidentLabel">진행 중인 장애</h3>
+          </header>
+          <div class="floor-incident-empty" id="floorIncidentEmpty">
+            <span class="floor-incident-empty__radar" aria-hidden="true"></span>
+            <strong data-i18n="noActiveIncident">진행 중인 장애 없음</strong>
+            <small data-i18n="selectRackObjective">Floor를 순찰하고 Rack 상태를 확인하세요.</small>
+          </div>
+          <div class="floor-incident-content" id="floorIncidentContent" hidden>
+            <div class="floor-incident-id"><span id="floorIncidentTicket">TKT-0000</span><b id="floorIncidentCategory">SERVER</b></div>
+            <h4 id="floorIncidentName">UNIDENTIFIED INCIDENT</h4>
+            <dl>
+              <div><dt data-i18n="rackLabel">Rack</dt><dd id="floorIncidentRack">—</dd></div>
+              <div><dt data-i18n="severityLabel">심각도</dt><dd id="floorIncidentSeverity">—</dd></div>
+              <div><dt data-i18n="statusLabel">상태</dt><dd id="floorIncidentStage">—</dd></div>
+              <div><dt>SLA</dt><dd id="floorIncidentSla">—</dd></div>
+            </dl>
+            <section class="floor-briefing-block">
+              <h5 data-i18n="investigationHintLabel">조사 힌트</h5>
+              <p id="floorIncidentHint">—</p>
+            </section>
+          </div>
+          <section class="floor-action-hints">
+            <h4 data-i18n="actionHintsLabel">Action 안내</h4>
+            <p><kbd>E</kbd> <span data-i18n="investigatePrompt">조사하기</span></p>
+            <p data-i18n="terminalHintLabel">Rack을 선택하면 안전한 Simulated Terminal이 연결됩니다.</p>
+            <ol class="floor-action-list">
+              <li data-i18n="actionInspectRack">Incident Rack에 접근해 상태를 확인합니다.</li>
+              <li data-i18n="actionReviewEvidence">Terminal에서 Evidence를 수집합니다.</li>
+              <li data-i18n="actionResolveVerify">Diagnosis 후 복구하고 시스템을 확인합니다.</li>
+            </ol>
+          </section>
+        </aside>
+      </div>
+
+      <div class="floor-bottom-hud">
+        <aside class="operator-panel" aria-labelledby="operatorTitle">
+          <div class="operator-panel__heading">
+            <div>
+              <p class="eyebrow">FIELD CONTROLS</p>
+              <h3 id="operatorTitle" data-i18n="controlsLabel">조작 방법</h3>
+            </div>
+            <span class="operator-panel__online">ONLINE</span>
+          </div>
+          <section class="floor-control-guide" aria-labelledby="floorControlsTitle">
+            <h4 id="floorControlsTitle" class="sr-only" data-i18n="controlsLabel">조작 방법</h4>
+            <div class="control-command control-command--move">
+              <span class="key-cluster" aria-hidden="true"><kbd class="key-up">↑</kbd><kbd class="key-left">←</kbd><kbd class="key-down">↓</kbd><kbd class="key-right">→</kbd></span>
+              <span><b data-i18n="movementLabel">이동</b><small>MOVE</small></span>
+            </div>
+            <div class="control-command control-command--interact">
+              <kbd class="key-interact">E</kbd><span><b data-i18n="interactionLabel">상호작용</b><small>INTERACT</small></span>
+            </div>
+          </section>
+          <div class="operator-loadout">
+            <span class="operator-loadout__label" data-i18n="operatorTitle">오퍼레이터 선택</span>
+            <div class="operator-cards" id="operatorCards"></div>
+          </div>
+          <p class="operator-notice" data-i18n="operatorNotice">공개 배포용 오리지널 CSS placeholder이며 특정 캐릭터 자산을 사용하지 않습니다.</p>
+        </aside>
+
+        <section class="terminal-panel" aria-labelledby="terminalTitle">
+          <div class="terminal-header">
+            <div>
+              <p class="eyebrow" data-i18n="safeEnvironmentLabel">안전한 Simulation 환경</p>
+              <h2 id="terminalTitle"><span data-i18n="investigationTerminalLabel">조사 터미널</span> <span id="terminalRackLabel">NO RACK SELECTED</span></h2>
+            </div>
+            <button class="terminal-clear-btn" id="terminalClearBtn" type="button" disabled>CLEAR</button>
+          </div>
+          <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
+          <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
+          <form class="terminal-command" id="terminalForm" autocomplete="off">
+            <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
+            <span class="terminal-prompt" id="terminalPrompt">operator@rack--:~$</span>
+            <input id="terminalInput" type="text" inputmode="text" spellcheck="false" autocapitalize="none" placeholder="Rack을 선택하세요" disabled>
+            <button class="terminal-run-btn" id="terminalRunBtn" type="submit" disabled>RUN</button>
+          </form>
+          <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
+          <div class="terminal-shortcuts" aria-hidden="true"><span><b>?</b> HELP</span><span><b>⌁</b> COMMANDS</span><span><b>●</b> SAFE SIMULATION</span></div>
+        </section>
+
+        <aside class="floor-tactical-hud">
+          <section class="floor-objectives" aria-labelledby="floorObjectivesTitle">
+            <div class="floor-tactical-heading"><h4 id="floorObjectivesTitle" data-i18n="objectivesLabel">목표</h4><span>LIVE</span></div>
+            <ol id="floorObjectives"></ol>
+          </section>
+          <section class="floor-mini-map" aria-labelledby="floorMapTitle">
+            <div class="floor-mini-map__heading"><h4 id="floorMapTitle" data-i18n="dataCenterMapLabel">데이터센터 맵</h4><span>HALL A</span></div>
+            <div class="floor-mini-map__grid" id="floorMiniMap"></div>
+          </section>
+        </aside>
+      </div>
+
+      <footer class="floor-status-strip" aria-label="Floor Mode 상태">
+        <span><i class="status-dot status-dot--green" aria-hidden="true"></i><b data-i18n="operatorStatusLabel">OPERATOR</b><strong id="floorStatusOperator">ROOKIE EXPLORER</strong></span>
+        <span><i class="status-shield" aria-hidden="true">◆</i><b data-i18n="clearanceLabel">CLEARANCE</b><strong>L2</strong></span>
+        <span class="floor-status-health"><b data-i18n="systemHealthLabel">SYSTEM HEALTH</b><i aria-hidden="true"><em></em></i><strong id="floorSystemHealth">100%</strong></span>
+        <span><i class="status-dot status-dot--cyan" aria-hidden="true"></i><b data-i18n="networkStatusLabel">NETWORK</b><strong>ONLINE</strong></span>
+        <span class="floor-status-build"><b>BUILD</b><strong>V1.1 PREVIEW</strong></span>
+      </footer>
+    </section>
+
+    <details class="legacy-operations">
+      <summary><span data-i18n="legacyConsoleLabel">기존 Operations Console 열기</span><small data-i18n="legacyConsoleDescription">Rack 상세, Incident Queue, Action, Event Log</small></summary>
+      <div class="legacy-operations__content">
     <div class="main-grid">
       <section class="rack-section">
         <div class="section-heading">
@@ -179,25 +385,8 @@
         </section>
       </aside>
     </div>
-
-    <section class="terminal-panel" aria-labelledby="terminalTitle">
-      <div class="terminal-header">
-        <div>
-          <p class="eyebrow">SAFE SIMULATED ENVIRONMENT</p>
-          <h2 id="terminalTitle">LINUX TERMINAL <span id="terminalRackLabel">NO RACK SELECTED</span></h2>
-        </div>
-        <button class="terminal-clear-btn" id="terminalClearBtn" type="button" disabled>CLEAR</button>
       </div>
-      <div class="terminal-sensor" id="terminalSensor" role="status" hidden></div>
-      <div class="terminal-screen" id="terminalOutput" role="log" aria-live="polite" aria-label="Terminal command history"></div>
-      <form class="terminal-command" id="terminalForm" autocomplete="off">
-        <label class="sr-only" for="terminalInput">Linux 명령어 입력</label>
-        <span class="terminal-prompt" id="terminalPrompt">operator@rack--:~$</span>
-        <input id="terminalInput" type="text" inputmode="text" spellcheck="false" autocapitalize="none" placeholder="Rack을 선택하세요" disabled>
-        <button class="terminal-run-btn" id="terminalRunBtn" type="submit" disabled>RUN</button>
-      </form>
-      <p class="terminal-hint">실제 명령은 실행되지 않습니다. <code>help</code>를 입력해 조사 명령을 확인하세요.</p>
-    </section>
+    </details>
 
     <footer class="app-footer">
       <span>DC OPS TRAINING CONSOLE</span>
@@ -364,6 +553,9 @@
   <script src="incidents.js"></script>
   <script src="storage.js"></script>
   <script src="analytics.js"></script>
+  <script src="floor.js"></script>
+  <script src="vendor/phaser.min.js"></script>
+  <script src="phaser-floor.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,0 +1,43 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 640" preserveAspectRatio="none" role="img" aria-label="Dark metallic data center room shell">
+  <defs>
+    <linearGradient id="wall" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#304550"/><stop offset=".18" stop-color="#172b35"/><stop offset=".7" stop-color="#0c1c24"/><stop offset="1" stop-color="#152b35"/>
+    </linearGradient>
+    <linearGradient id="sideL" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#304751"/><stop offset=".36" stop-color="#162933"/><stop offset="1" stop-color="#071116"/></linearGradient>
+    <linearGradient id="sideR" x1="1" y1="0" x2="0" y2="0"><stop stop-color="#304751"/><stop offset=".36" stop-color="#162933"/><stop offset="1" stop-color="#071116"/></linearGradient>
+    <linearGradient id="door" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#273c46"/><stop offset=".5" stop-color="#101f27"/><stop offset="1" stop-color="#071218"/></linearGradient>
+    <filter id="coolGlow" x="-60%" y="-200%" width="220%" height="500%"><feGaussianBlur stdDeviation="5"/></filter>
+    <filter id="deepShadow" x="-30%" y="-30%" width="160%" height="180%"><feDropShadow dx="0" dy="8" stdDeviation="9" flood-color="#000" flood-opacity=".72"/></filter>
+    <pattern id="wallGrain" width="18" height="18" patternUnits="userSpaceOnUse">
+      <path d="M0 17.5h18" stroke="#8fb4be" stroke-opacity=".025"/><circle cx="4" cy="4" r=".6" fill="#a8c8d0" opacity=".05"/>
+    </pattern>
+  </defs>
+  <path d="M24 20h1152l18 24v558l-26 24H32L6 602V44z" fill="none" stroke="#3b5662" stroke-width="7" filter="url(#deepShadow)"/>
+  <path d="M30 27h1140l13 20v87H17V47z" fill="url(#wall)" stroke="#49646f" stroke-width="3"/>
+  <path d="M31 31h1138l9 12H22z" fill="#7f939b" opacity=".18"/>
+  <path d="M18 133h1165v16H18z" fill="#071116"/><path d="M20 137h1160" stroke="#496976" stroke-width="3"/>
+  <path d="M17 137 59 152 43 601 18 618z" fill="url(#sideL)" stroke="#3b5966" stroke-width="3"/>
+  <path d="m1182 137-42 15 16 449 25 17z" fill="url(#sideR)" stroke="#3b5966" stroke-width="3"/>
+  <path d="M28 35h1144v93H28z" fill="url(#wallGrain)"/>
+  <g fill="#071116" stroke="#4c6671" stroke-width="2">
+    <path d="M205 69h76v38h-76z"/><path d="M214 77h58v22h-58z"/><path d="M220 79v18m8-18v18m8-18v18m8-18v18m8-18v18m8-18v18" stroke="#263e48"/>
+    <path d="M902 69h76v38h-76z"/><path d="M911 77h58v22h-58z"/><path d="M917 79v18m8-18v18m8-18v18m8-18v18m8-18v18m8-18v18" stroke="#263e48"/>
+  </g>
+  <g>
+    <rect x="79" y="58" width="112" height="77" rx="2" fill="url(#door)" stroke="#536b75" stroke-width="4"/>
+    <path d="M135 60v73" stroke="#6b7d84" stroke-width="2"/><rect x="91" y="71" width="32" height="47" fill="#0b171d" stroke="#2e4650"/>
+    <circle cx="176" cy="98" r="4" fill="#ffc857"/><rect x="66" y="40" width="70" height="22" rx="2" fill="#0b432f" stroke="#55e1a2" stroke-width="2"/>
+    <text x="101" y="55" text-anchor="middle" fill="#9affc7" font-family="monospace" font-size="14" font-weight="800">EXIT</text>
+  </g>
+  <g fill="#d8ffff">
+    <rect x="365" y="51" width="146" height="7" rx="2"/><rect x="695" y="51" width="146" height="7" rx="2"/>
+  </g>
+  <g fill="#aeeff1" opacity=".35" filter="url(#coolGlow)">
+    <rect x="350" y="47" width="176" height="15"/><rect x="680" y="47" width="176" height="15"/>
+  </g>
+  <g fill="#11242d" stroke="#425d69">
+    <rect x="1030" y="64" width="72" height="34"/><rect x="1040" y="72" width="52" height="4"/><rect x="1040" y="81" width="52" height="4"/><rect x="1040" y="90" width="52" height="4"/>
+  </g>
+  <path d="M59 152h1081" stroke="#66818b" stroke-opacity=".35"/><path d="M45 601h1111" stroke="#13272f" stroke-width="12"/>
+  <g fill="#dfc16b" opacity=".65"><path d="M26 254h16v70H26zM1158 254h16v70h-16z"/></g>
+</svg>

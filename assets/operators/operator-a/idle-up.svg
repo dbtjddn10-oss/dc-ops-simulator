@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 80" aria-hidden="true">
+  <ellipse cx="32" cy="73" rx="19" ry="5" fill="#020508" opacity=".55"/>
+  <path d="M21 57h10v14H18v-5zM33 57h10l3 9v5H33z" fill="#172934" stroke="#071117" stroke-width="2"/><path d="M17 68h14v5H17zM33 68h14v5H33z" fill="#324753" stroke="#071117" stroke-width="2"/>
+  <path d="M19 32h26l4 27-8 5H23l-8-5z" fill="#16333f" stroke="#071117" stroke-width="2"/><path d="M23 33h18v28H23z" fill="#ed735f"/><path d="M16 36h7v22h-8l-3-17zM41 36h7l4 5-3 17h-8z" fill="#1f4654" stroke="#071117" stroke-width="2"/>
+  <path d="M25 38h14v12H25z" fill="#102832" stroke="#78aeb9"/><text x="32" y="46" text-anchor="middle" fill="#d8ffff" font-family="monospace" font-size="6" font-weight="800">OPS</text>
+  <path d="M21 13q11-10 22 0v13q-2 9-11 10-9-1-11-10z" fill="#d8a47f" stroke="#071117" stroke-width="2"/><path d="M19 20Q19 5 32 4q14 1 14 16v10l-5 5-4-20-10 1-4 19-4-5z" fill="#5a3428" stroke="#071117" stroke-width="2"/><path d="M22 18q10 7 20 0" fill="none" stroke="#714332" stroke-width="2"/>
+  <path d="M19 18q0-8 5-11M45 18q0-8-5-11" fill="none" stroke="#41616f" stroke-width="2"/><rect x="17" y="18" width="4" height="9" rx="2" fill="#41616f"/><rect x="43" y="18" width="4" height="9" rx="2" fill="#41616f"/>
+</svg>

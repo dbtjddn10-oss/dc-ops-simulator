@@ -15,6 +15,7 @@
     simulatedStartMinutes: 22 * 60,
     simulatedDurationMinutes: 8 * 60
   });
+  const PLAYER_MOVE_TRANSITION_MS = 105;
 
   const testAutoMinMs = query.has("autoMinMs") ? testNumber("autoMinMs", 15000) : null;
   const testAutoMaxMs = query.has("autoMaxMs") ? testNumber("autoMaxMs", 30000) : null;
@@ -93,6 +94,7 @@
     : [];
   const Analytics = window.DCOpsAnalytics;
   const Storage = window.DCOpsStorage;
+  const Floor = window.DCOpsFloor;
   const initialArchive = Storage.loadArchive();
 
   function randomBetween(min, max) {
@@ -156,6 +158,13 @@
     archiveConfirmAction: null,
     fullRackWarningActive: false,
     selectedDifficulty: "NORMAL",
+    floor: {
+      player: { x: 6, y: 7, facing: "north" },
+      phaserPlayer: null,
+      operatorId: "rookie",
+      language: "ko",
+      nearbyAssetId: null
+    },
     stats: createEmptyStats(),
     shift: {
       status: "IDLE",
@@ -169,6 +178,10 @@
       archived: false
     }
   };
+  let floorMotionTimerId = null;
+  let phaserFloorController = null;
+  let terminalHistoryIndex = null;
+  let terminalHistoryDraft = "";
 
   const elements = {
     rackGrid: document.querySelector("#rackGrid"),
@@ -285,6 +298,46 @@
     terminalInput: document.querySelector("#terminalInput"),
     terminalRunBtn: document.querySelector("#terminalRunBtn"),
     terminalClearBtn: document.querySelector("#terminalClearBtn"),
+    floorStage: document.querySelector("#floorStage"),
+    phaserFloorMount: document.querySelector("#phaserFloorMount"),
+    phaserFloorStatus: document.querySelector("#phaserFloorStatus"),
+    floorAssets: document.querySelector("#floorAssets"),
+    floorPlayer: document.querySelector("#floorPlayer"),
+    floorPlayerGlyph: document.querySelector("#floorPlayerGlyph"),
+    floorPlayerLabel: document.querySelector("#floorPlayerLabel"),
+    floorInteractionStatus: document.querySelector("#floorInteractionStatus"),
+    floorInteractionPrompt: document.querySelector("#floorInteractionPrompt"),
+    floorHudTime: document.querySelector("#floorHudTime"),
+    floorHudDifficulty: document.querySelector("#floorHudDifficulty"),
+    floorHudScore: document.querySelector("#floorHudScore"),
+    floorHudIncidents: document.querySelector("#floorHudIncidents"),
+    floorMode: document.querySelector(".floor-mode"),
+    floorBriefing: document.querySelector(".floor-briefing"),
+    floorMenuToggleBtn: document.querySelector("#floorMenuToggleBtn"),
+    floorMenuPanel: document.querySelector("#floorMenuPanel"),
+    floorStartShiftBtn: document.querySelector("#floorStartShiftBtn"),
+    floorTriggerIncidentBtn: document.querySelector("#floorTriggerIncidentBtn"),
+    floorHistoryBtn: document.querySelector("#floorHistoryBtn"),
+    floorArchiveBtn: document.querySelector("#floorArchiveBtn"),
+    floorDashboardBtn: document.querySelector("#floorDashboardBtn"),
+    returnFloorViewBtn: document.querySelector("#returnFloorViewBtn"),
+    legacyOperations: document.querySelector(".legacy-operations"),
+    floorIncidentEmpty: document.querySelector("#floorIncidentEmpty"),
+    floorIncidentContent: document.querySelector("#floorIncidentContent"),
+    floorIncidentTicket: document.querySelector("#floorIncidentTicket"),
+    floorIncidentCategory: document.querySelector("#floorIncidentCategory"),
+    floorIncidentName: document.querySelector("#floorIncidentName"),
+    floorIncidentRack: document.querySelector("#floorIncidentRack"),
+    floorIncidentSeverity: document.querySelector("#floorIncidentSeverity"),
+    floorIncidentStage: document.querySelector("#floorIncidentStage"),
+    floorIncidentSla: document.querySelector("#floorIncidentSla"),
+    floorIncidentHint: document.querySelector("#floorIncidentHint"),
+    floorObjectives: document.querySelector("#floorObjectives"),
+    floorMiniMap: document.querySelector("#floorMiniMap"),
+    floorStatusOperator: document.querySelector("#floorStatusOperator"),
+    floorSystemHealth: document.querySelector("#floorSystemHealth"),
+    operatorCards: document.querySelector("#operatorCards"),
+    languageToggle: document.querySelector("#languageToggle"),
     newShiftBtn: document.querySelector("#newShiftBtn"),
     appVersion: document.querySelector("#appVersion")
   };
@@ -740,11 +793,230 @@ TERMINAL
     event.preventDefault();
     const command = elements.terminalInput.value;
     elements.terminalInput.value = "";
+    terminalHistoryIndex = null;
+    terminalHistoryDraft = "";
     executeTerminalCommand(command);
     elements.terminalInput.focus();
   }
 
+  function handleTerminalHistoryKeydown(event) {
+    if (event.key !== "ArrowUp" && event.key !== "ArrowDown") return;
+    const rack = racks.find((item) => item.id === game.selectedId);
+    const commands = getTerminalSession(rack)?.map((record) => record.command) ?? [];
+    if (!commands.length) return;
+
+    event.preventDefault();
+    if (event.key === "ArrowUp") {
+      if (terminalHistoryIndex === null) {
+        terminalHistoryDraft = elements.terminalInput.value;
+        terminalHistoryIndex = commands.length - 1;
+      } else {
+        terminalHistoryIndex = Math.max(0, terminalHistoryIndex - 1);
+      }
+      elements.terminalInput.value = commands[terminalHistoryIndex];
+    } else if (terminalHistoryIndex !== null && terminalHistoryIndex < commands.length - 1) {
+      terminalHistoryIndex += 1;
+      elements.terminalInput.value = commands[terminalHistoryIndex];
+    } else if (terminalHistoryIndex !== null) {
+      terminalHistoryIndex = null;
+      elements.terminalInput.value = terminalHistoryDraft;
+    }
+    elements.terminalInput.setSelectionRange(elements.terminalInput.value.length, elements.terminalInput.value.length);
+  }
+
+  function resetTerminalHistoryNavigation() {
+    terminalHistoryIndex = null;
+    terminalHistoryDraft = "";
+  }
+
   // ---------------- 화면 그리기 ----------------
+  function floorText(key, variables = {}) {
+    return Floor.translate(game.floor.language, key, variables);
+  }
+
+  function getFloorOperator() {
+    return Floor.OPERATORS.find((operator) => operator.id === game.floor.operatorId) ?? Floor.OPERATORS[0];
+  }
+
+  function renderOperators() {
+    elements.operatorCards.innerHTML = Floor.OPERATORS.map((operator) => {
+      const selected = operator.id === game.floor.operatorId;
+      return `<button class="operator-card${selected ? " selected" : ""}" type="button" data-operator-id="${operator.id}" data-tone="${operator.tone}" aria-pressed="${selected}">
+        <span class="operator-card__avatar" aria-hidden="true">${operator.glyph}</span>
+        <span><strong>${escapeHtml(floorText(operator.nameKey))}</strong><small>${escapeHtml(floorText(operator.roleKey))}</small></span>
+        <span class="operator-card__check" aria-hidden="true">${selected ? "SELECTED" : ""}</span>
+      </button>`;
+    }).join("");
+  }
+
+  function isPhaserFloorReady() {
+    return Boolean(phaserFloorController?.isReady());
+  }
+
+  function focusFloorScene() {
+    if (isPhaserFloorReady()) phaserFloorController.focus();
+    else elements.floorStage.focus({ preventScroll: true });
+  }
+
+  function updateFloorInteractionStatus(assetId = game.floor.nearbyAssetId) {
+    const asset = Floor.FLOOR_ASSETS.find((item) => item.id === assetId);
+    if (!asset) {
+      elements.floorInteractionStatus.textContent = floorText("nearbyNone");
+      return;
+    }
+    const statusKey = asset.type === "rack" ? "nearbyRack" : "nearbyFacility";
+    elements.floorInteractionStatus.textContent = floorText(statusKey, { asset: asset.label });
+  }
+
+  function updateFloorMiniMapPlayer(position = game.floor.phaserPlayer) {
+    const marker = elements.floorMiniMap.querySelector(".mini-map-player");
+    if (!marker || !position?.miniMap || !isPhaserFloorReady()) return;
+    marker.style.left = `${position.miniMap.xPercent}%`;
+    marker.style.top = `${position.miniMap.yPercent}%`;
+    marker.title = floorText(getFloorOperator().nameKey);
+  }
+
+  function syncPhaserFloorState() {
+    if (!phaserFloorController) return;
+    const activeIncidentRack = racks.find((rack) => rack.ticket);
+    phaserFloorController.setRackStates(Floor.FLOOR_ASSETS
+      .filter((asset) => asset.type === "rack")
+      .map((asset) => {
+        const rack = racks.find((item) => item.id === asset.rackId);
+        return {
+          rackId: asset.rackId,
+          state: rack?.ticket ? "critical" : rack?.status === "warning" ? "warning" : "normal",
+          incident: Boolean(rack?.ticket),
+          selected: game.selectedId === asset.rackId,
+          planned: !rack
+        };
+      }));
+    phaserFloorController.setActiveIncidentRack(activeIncidentRack?.id ?? null);
+    phaserFloorController.setSelectedRack(game.selectedId);
+    phaserFloorController.setOperator(game.floor.operatorId);
+    phaserFloorController.setLanguage(game.floor.language);
+    phaserFloorController.setShiftState({
+      status: game.shift.status,
+      difficulty: getCurrentDifficultyKey(),
+      score: game.score,
+      remainingSeconds: game.shift.remainingSeconds
+    });
+  }
+
+  function renderFloor() {
+    const nearbyAsset = isPhaserFloorReady()
+      ? Floor.FLOOR_ASSETS.find((asset) => asset.id === game.floor.nearbyAssetId) ?? null
+      : Floor.findNearbyAsset(game.floor.player);
+    if (!isPhaserFloorReady()) game.floor.nearbyAssetId = nearbyAsset?.id ?? null;
+
+    elements.floorAssets.innerHTML = Floor.FLOOR_ASSETS.map((asset) => {
+      const rack = asset.type === "rack" && asset.rackId <= racks.length
+        ? racks.find((item) => item.id === asset.rackId)
+        : null;
+      const classes = ["floor-asset", asset.type === "facility" ? "facility" : "rack"];
+      if (asset.type === "rack" && !rack) classes.push("planned");
+      if (rack?.ticket) classes.push("incident");
+      else if (rack?.status === "warning") classes.push("warning");
+      if (rack && game.selectedId === rack.id) classes.push("selected");
+      if (nearbyAsset?.id === asset.id) classes.push("nearby");
+      const state = rack ? floorText("operational") : asset.type === "rack" ? floorText("planned") : asset.facilityType;
+      const rackAssetState = rack?.ticket ? "critical" : rack?.status === "warning" ? "warning" : "normal";
+      const assetPath = asset.type === "rack"
+        ? `assets/equipment/rack-${rackAssetState}.svg`
+        : `assets/equipment/${asset.facilityType.toLowerCase()}.svg`;
+      const warning = rack?.ticket
+        ? `<img class="rack-warning" src="assets/ui/warning-diamond.svg" alt="" aria-hidden="true" draggable="false">`
+        : "";
+      const visual = `<span class="floor-asset__visual" aria-hidden="true">
+        <img class="floor-equipment-svg floor-equipment-svg--${asset.type === "rack" ? "rack" : asset.facilityType.toLowerCase()}" src="${assetPath}" alt="" draggable="false">${warning}
+      </span>`;
+      return `<button class="${classes.join(" ")}" type="button" data-floor-asset-id="${asset.id}" style="grid-column:${asset.x};grid-row:${asset.y}" aria-label="${asset.label}, ${state}">
+        <strong>${asset.label}</strong>${visual}<small>${state}</small>
+      </button>`;
+    }).join("");
+
+    const operator = getFloorOperator();
+    elements.floorPlayer.style.setProperty("--player-x", game.floor.player.x);
+    elements.floorPlayer.style.setProperty("--player-y", game.floor.player.y);
+    elements.floorPlayer.style.setProperty("--player-left", `${((game.floor.player.x - 0.5) / Floor.GRID_WIDTH) * 100}%`);
+    elements.floorPlayer.style.setProperty("--player-top", `${((game.floor.player.y - 0.5) / Floor.GRID_HEIGHT) * 100}%`);
+    elements.floorPlayer.style.setProperty("--player-move-duration", `${PLAYER_MOVE_TRANSITION_MS}ms`);
+    elements.floorPlayer.dataset.facing = game.floor.player.facing;
+    elements.floorPlayer.dataset.tone = operator.tone;
+    elements.floorPlayerGlyph.textContent = operator.glyph;
+    elements.floorPlayerLabel.textContent = floorText(operator.nameKey);
+    elements.floorStatusOperator.textContent = floorText(operator.nameKey);
+    elements.floorInteractionPrompt.style.setProperty("--prompt-x", nearbyAsset?.x ?? game.floor.player.x);
+    elements.floorInteractionPrompt.style.setProperty("--prompt-y", nearbyAsset?.y ?? game.floor.player.y);
+    elements.floorInteractionPrompt.hidden = !nearbyAsset;
+
+    updateFloorInteractionStatus(nearbyAsset?.id ?? null);
+
+    elements.floorMiniMap.innerHTML = Floor.FLOOR_ASSETS.map((asset) => {
+      const rack = asset.type === "rack" && asset.rackId <= racks.length ? racks.find((item) => item.id === asset.rackId) : null;
+      const classes = ["mini-map-node", asset.type];
+      if (asset.type === "facility") classes.push(`facility-${asset.facilityType.toLowerCase()}`);
+      if (rack?.ticket) classes.push("incident");
+      if (rack && game.selectedId === rack.id) classes.push("selected");
+      return `<i class="${classes.join(" ")}" style="grid-column:${asset.x};grid-row:${asset.y}" title="${asset.label}"></i>`;
+    }).join("") + (isPhaserFloorReady() && game.floor.phaserPlayer?.miniMap
+      ? `<i class="mini-map-player phaser-position" style="left:${game.floor.phaserPlayer.miniMap.xPercent}%;top:${game.floor.phaserPlayer.miniMap.yPercent}%" title="${floorText(getFloorOperator().nameKey)}"></i>`
+      : `<i class="mini-map-player" style="grid-column:${game.floor.player.x};grid-row:${game.floor.player.y}" title="${floorText(getFloorOperator().nameKey)}"></i>`);
+    syncPhaserFloorState();
+  }
+
+  function renderFloorBriefing() {
+    const selectedRack = racks.find((rack) => rack.id === game.selectedId);
+    const incidentRack = selectedRack?.ticket ? selectedRack : racks.find((rack) => rack.ticket);
+    const ticket = incidentRack?.ticket;
+    elements.floorBriefing.classList.toggle("has-incident", Boolean(ticket));
+    elements.floorIncidentEmpty.hidden = Boolean(ticket);
+    elements.floorIncidentContent.hidden = !ticket;
+    if (!ticket) {
+      elements.floorObjectives.innerHTML = ["objectiveSelectRack", "objectiveCollectEvidence", "objectiveDiagnose", "objectiveRecover"]
+        .map((key) => `<li><i aria-hidden="true"></i>${escapeHtml(floorText(key))}</li>`)
+        .join("");
+      return;
+    }
+
+    const diagnosed = ticket.stage === "action";
+    const evidenceCollected = getEvidenceCount(ticket) > 0;
+    elements.floorIncidentTicket.textContent = ticket.ticketId;
+    elements.floorIncidentCategory.textContent = ticket.category;
+    elements.floorIncidentCategory.className = `category-${ticket.category.toLowerCase()}`;
+    elements.floorIncidentName.textContent = diagnosed ? ticket.title : "UNIDENTIFIED INCIDENT";
+    elements.floorIncidentRack.textContent = rackLabel(incidentRack.id);
+    elements.floorIncidentSeverity.textContent = ticket.severity;
+    elements.floorIncidentStage.textContent = floorText(diagnosed ? "stageAction" : "stageReported");
+    elements.floorIncidentSla.textContent = ticket.slaBreached ? "BREACH" : formatClock(getSlaRemaining(ticket));
+    elements.floorIncidentHint.textContent = ticket.investigationHint || ticket.symptom;
+
+    const objectives = [
+      { key: "objectiveSelectRack", complete: game.selectedId === incidentRack.id },
+      { key: "objectiveCollectEvidence", complete: evidenceCollected },
+      { key: "objectiveDiagnose", complete: diagnosed },
+      { key: "objectiveRecover", complete: false }
+    ];
+    elements.floorObjectives.innerHTML = objectives.map((objective) =>
+      `<li class="${objective.complete ? "complete" : ""}"><i aria-hidden="true"></i>${escapeHtml(floorText(objective.key))}</li>`
+    ).join("");
+  }
+
+  function applyFloorLanguage() {
+    document.documentElement.lang = game.floor.language;
+    document.querySelectorAll("[data-i18n]").forEach((node) => {
+      node.textContent = floorText(node.dataset.i18n);
+    });
+    elements.languageToggle.querySelectorAll("[data-language]").forEach((button) => {
+      const selected = button.dataset.language === game.floor.language;
+      button.classList.toggle("selected", selected);
+      button.setAttribute("aria-pressed", String(selected));
+    });
+    renderOperators();
+    renderFloor();
+    renderFloorBriefing();
+  }
+
   function renderRacks(focusSelected = false) {
     elements.rackGrid.innerHTML = racks.map((rack) => {
       const info = STATUS_INFO[rack.status];
@@ -778,6 +1050,10 @@ TERMINAL
     elements.incidentCount.innerHTML = `${openCount}<span class="stat-unit">OPEN</span>`;
     elements.incidentTrend.textContent = openCount ? "즉시 대응 필요" : "모든 서비스 정상";
     elements.tempTrend.textContent = game.temperature >= 25 ? "온도 상승 감지" : "냉각 시스템 정상";
+    elements.floorHudScore.textContent = `${game.score} PTS`;
+    elements.floorHudIncidents.textContent = String(openCount);
+    elements.floorSystemHealth.textContent = `${game.availability.toFixed(0)}%`;
+    elements.floorSystemHealth.previousElementSibling?.style.setProperty("--health", `${game.availability}%`);
 
     const selected = racks.find((rack) => rack.id === game.selectedId);
     if (!selected) {
@@ -1351,13 +1627,18 @@ TERMINAL
     elements.shiftGameTime.textContent = formatSimulatedTime(
       SHIFT_CONFIG.simulatedStartMinutes + SHIFT_CONFIG.simulatedDurationMinutes * progress
     );
+    elements.floorHudTime.textContent = elements.shiftGameTime.textContent;
     elements.shiftRemaining.textContent = formatClock(shift.remainingSeconds);
     elements.startShiftBtn.disabled = shift.status !== "IDLE";
     elements.startShiftBtn.textContent = shift.status === "RUNNING"
-      ? "교대 진행 중 · SHIFT RUNNING"
+      ? floorText("shiftRunningLabel")
       : shift.status === "ENDED"
-        ? "교대 종료 · SHIFT ENDED"
-        : "교대 시작 · START SHIFT";
+        ? floorText("shiftEndedLabel")
+        : floorText("startShiftLabel");
+    elements.floorStartShiftBtn.textContent = elements.startShiftBtn.textContent;
+    elements.floorStartShiftBtn.disabled = shift.status !== "IDLE";
+    elements.floorTriggerIncidentBtn.disabled = shift.status === "ENDED";
+    elements.endShiftBtn.textContent = floorText("endShiftLabel");
     elements.endShiftBtn.hidden = shift.status !== "RUNNING";
     elements.endShiftBtn.disabled = shift.status !== "RUNNING";
     elements.incidentBtn.disabled = shift.status === "ENDED";
@@ -1365,6 +1646,7 @@ TERMINAL
     const difficultyKey = getCurrentDifficultyKey();
     const difficulty = getDifficultyConfig(difficultyKey);
     elements.currentDifficulty.textContent = difficulty.label;
+    elements.floorHudDifficulty.textContent = difficulty.label;
     elements.currentDifficulty.className = difficultyKey.toLowerCase();
     elements.difficultySummary.textContent = `SLA ×${difficulty.slaMultiplier.toFixed(2)} · SCORE ×${difficulty.scoreMultiplier.toFixed(2)} · INVESTIGATION ${difficulty.investigationRequired ? "REQUIRED" : "OPTIONAL"}`;
     if (shift.status === "IDLE") elements.scoreTrend.textContent = Analytics.formatScoreMultiplier(difficulty.scoreMultiplier);
@@ -1383,6 +1665,8 @@ TERMINAL
 
   function refreshUI(focusSelected = false) {
     renderRacks(focusSelected);
+    renderFloor();
+    renderFloorBriefing();
     updateDashboard();
     updateTicketPanel();
     updateDecisionPanel();
@@ -1653,6 +1937,7 @@ TERMINAL
     if (changed) updateDashboard();
     updateTicketPanel();
     updateIncidentQueue();
+    renderFloorBriefing();
     updateShiftPanel();
   }
 
@@ -1975,12 +2260,199 @@ TERMINAL
     elements.incidentQueue.querySelector(`[data-queue-rack-id="${game.selectedId}"]`)?.focus();
   }
 
+  function handleOperatorSelection(event) {
+    const button = event.target.closest("[data-operator-id]");
+    if (!button || !Floor.OPERATORS.some((operator) => operator.id === button.dataset.operatorId)) return;
+    game.floor.operatorId = button.dataset.operatorId;
+    renderOperators();
+    renderFloor();
+    focusFloorScene();
+    showToast(floorText("operatorSelected", { operator: floorText(getFloorOperator().nameKey) }));
+  }
+
+  function handleLanguageSelection(event) {
+    const button = event.target.closest("[data-language]");
+    if (!button || !Object.hasOwn(Floor.TRANSLATIONS, button.dataset.language)) return;
+    game.floor.language = button.dataset.language;
+    applyFloorLanguage();
+    refreshUI();
+    focusFloorScene();
+  }
+
+  function setFloorMenuOpen(open) {
+    elements.floorMenuPanel.hidden = !open;
+    elements.floorMenuToggleBtn.setAttribute("aria-expanded", String(open));
+  }
+
+  function toggleFloorMenu() {
+    setFloorMenuOpen(elements.floorMenuPanel.hidden);
+  }
+
+  function showLegacyDashboard() {
+    setFloorMenuOpen(false);
+    document.body.classList.add("dashboard-expanded");
+    elements.legacyOperations.open = true;
+    document.querySelector(".topbar")?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+
+  function returnToFloorMode() {
+    setFloorMenuOpen(false);
+    document.body.classList.remove("dashboard-expanded");
+    elements.legacyOperations.open = false;
+    elements.floorMode.scrollIntoView({ behavior: "smooth", block: "start" });
+    focusFloorScene();
+  }
+
+  function interactWithFloorAsset(asset) {
+    if (!asset) {
+      showToast(floorText("nearbyNone"), "error");
+      return;
+    }
+    if (asset.type === "facility") {
+      showToast(floorText("facilityPlaceholder", { asset: asset.label }));
+      return;
+    }
+    if (asset.rackId > racks.length) {
+      showToast(floorText("plannedRack", { asset: asset.label }));
+      return;
+    }
+    game.selectedId = asset.rackId;
+    refreshUI();
+    showToast(floorText("rackLinked", { asset: asset.label }));
+  }
+
+  function interactWithNearbyFloorAsset() {
+    const asset = Floor.FLOOR_ASSETS.find((item) => item.id === game.floor.nearbyAssetId);
+    interactWithFloorAsset(asset);
+  }
+
+  function canPhaserCaptureInput() {
+    const active = document.activeElement;
+    const formControl = active instanceof HTMLElement
+      && (active.matches("input, textarea, select, button") || active.isContentEditable);
+    const modalOpen = managedModals.some((modal) => !modal.hidden);
+    return !formControl && !modalOpen && !document.body.classList.contains("dashboard-expanded");
+  }
+
+  function initializePhaserFloor() {
+    if (query.get("floorRenderer") === "dom") {
+      elements.floorStage.dataset.phaserState = "test-fallback";
+      elements.phaserFloorStatus.textContent = "Legacy DOM Floor test fallback active";
+      return;
+    }
+    if (!window.DCOpsPhaserFloor || !elements.phaserFloorMount) {
+      elements.floorStage.dataset.phaserState = "unavailable";
+      elements.phaserFloorStatus.textContent = "Legacy DOM Floor active";
+      return;
+    }
+    try {
+      phaserFloorController = window.DCOpsPhaserFloor.create({
+        parent: elements.phaserFloorMount,
+        floorApi: Floor,
+        debug: query.get("debugFloor") === "1",
+        initialPlayer: { worldX: 720, worldY: 360, facing: game.floor.player.facing },
+        canCaptureInput: canPhaserCaptureInput,
+        onReady() {
+          elements.floorStage.dataset.phaserState = "ready";
+          elements.floorMode.dataset.renderer = "phaser";
+          elements.phaserFloorStatus.textContent = "Phaser Floor ready";
+          syncPhaserFloorState();
+          renderFloor();
+        },
+        onPlayerPositionChange(position) {
+          game.floor.phaserPlayer = position;
+          game.floor.player = { ...position.grid, facing: position.facing };
+          updateFloorMiniMapPlayer(position);
+        },
+        onNearbyAssetChange(assetId) {
+          game.floor.nearbyAssetId = assetId;
+          updateFloorInteractionStatus(assetId);
+        },
+        onAssetInteract(assetId) {
+          const asset = Floor.FLOOR_ASSETS.find((item) => item.id === assetId);
+          interactWithFloorAsset(asset);
+        },
+        onError(error) {
+          console.error("Phaser Floor initialization failed; using the legacy DOM Floor.", error);
+          elements.floorStage.dataset.phaserState = "error";
+          delete elements.floorMode.dataset.renderer;
+          elements.phaserFloorStatus.textContent = "Legacy DOM Floor fallback active";
+        }
+      });
+    } catch (error) {
+      console.error("Phaser Floor unavailable; using the legacy DOM Floor.", error);
+      elements.floorStage.dataset.phaserState = "error";
+      delete elements.floorMode.dataset.renderer;
+    }
+  }
+
+  function handleFloorAssetClick(event) {
+    const button = event.target.closest("[data-floor-asset-id]");
+    if (!button) return;
+    focusFloorScene();
+    const asset = Floor.FLOOR_ASSETS.find((item) => item.id === button.dataset.floorAssetId);
+    if (!asset) return;
+    showToast(asset.id === game.floor.nearbyAssetId
+      ? floorText(asset.type === "rack" ? "nearbyRack" : "nearbyFacility", { asset: asset.label })
+      : floorText("nearbyNone"));
+  }
+
+  function handleFloorKeydown(event) {
+    const target = event.target;
+    const formControl = target instanceof HTMLElement
+      && (target.matches("input, textarea, select, button") || target.isContentEditable);
+    const modalOpen = managedModals.some((modal) => !modal.hidden);
+    if (formControl || modalOpen) return;
+
+    if (isPhaserFloorReady()) {
+      if (Object.hasOwn(Floor.DIRECTIONS, event.key) || event.key.toLowerCase() === "e") {
+        event.preventDefault();
+        phaserFloorController.handleKeyDown(event.key, event.repeat);
+      }
+      return;
+    }
+
+    if (Object.hasOwn(Floor.DIRECTIONS, event.key)) {
+      event.preventDefault();
+      const previousPlayer = game.floor.player;
+      game.floor.player = Floor.movePlayer(previousPlayer, event.key);
+      const moved = previousPlayer.x !== game.floor.player.x || previousPlayer.y !== game.floor.player.y;
+      clearTimeout(floorMotionTimerId);
+      elements.floorPlayer.dataset.motion = moved ? "walk" : "idle";
+      if (moved) {
+        floorMotionTimerId = setTimeout(() => {
+          elements.floorPlayer.dataset.motion = "idle";
+        }, PLAYER_MOVE_TRANSITION_MS + 35);
+      }
+      renderFloor();
+      return;
+    }
+    if (event.key.toLowerCase() === "e" && !event.repeat) {
+      event.preventDefault();
+      interactWithNearbyFloorAsset();
+    }
+  }
+
+  function handleFloorKeyup(event) {
+    if (isPhaserFloorReady()) {
+      phaserFloorController.handleKeyUp(event.key);
+      return;
+    }
+    if (!Object.hasOwn(Floor.DIRECTIONS, event.key)) return;
+    clearTimeout(floorMotionTimerId);
+    elements.floorPlayer.dataset.motion = "idle";
+  }
+
   function heartbeat() {
     updateShiftClock();
     updateSlaTimers();
   }
 
   function handleModalKeydown(event) {
+    if (event.key === "Escape" && !elements.floorMenuPanel.hidden) {
+      setFloorMenuOpen(false);
+      elements.floorMenuToggleBtn.focus();
+    }
     const activeModal = [
       elements.archiveConfirmModal,
       elements.endShiftConfirmModal,
@@ -2020,6 +2492,13 @@ TERMINAL
     if (!elements.archiveModal.hidden) closeArchive();
   }
 
+  function handleGameAssetError(event) {
+    const image = event.target;
+    if (!(image instanceof HTMLImageElement) || !image.matches(".scene-environment-asset, .floor-equipment-svg, .rack-warning, .operator-frame")) return;
+    image.hidden = true;
+    image.closest(".floor-asset__visual, .operator-sprite")?.classList.add("asset-missing");
+  }
+
   function initializeGame() {
     elements.appVersion.textContent = APP_VERSION;
     elements.rackGrid.addEventListener("click", handleRackSelection);
@@ -2056,7 +2535,27 @@ TERMINAL
     document.addEventListener("keydown", handleModalKeydown);
     elements.newShiftBtn.addEventListener("click", startNewShift);
     elements.terminalForm.addEventListener("submit", handleTerminalSubmit);
+    elements.terminalInput.addEventListener("keydown", handleTerminalHistoryKeydown);
+    elements.terminalInput.addEventListener("input", resetTerminalHistoryNavigation);
     elements.terminalClearBtn.addEventListener("click", clearTerminalSession);
+    elements.operatorCards.addEventListener("click", handleOperatorSelection);
+    elements.languageToggle.addEventListener("click", handleLanguageSelection);
+    elements.floorAssets.addEventListener("click", handleFloorAssetClick);
+    elements.floorMenuToggleBtn.addEventListener("click", toggleFloorMenu);
+    elements.floorMenuPanel.addEventListener("click", (event) => {
+      if (event.target.closest("button")) setFloorMenuOpen(false);
+    });
+    elements.floorStartShiftBtn.addEventListener("click", startShift);
+    elements.floorTriggerIncidentBtn.addEventListener("click", () => triggerIncident("manual"));
+    elements.floorHistoryBtn.addEventListener("click", openHistory);
+    elements.floorArchiveBtn.addEventListener("click", openArchive);
+    elements.floorDashboardBtn.addEventListener("click", showLegacyDashboard);
+    elements.returnFloorViewBtn.addEventListener("click", returnToFloorMode);
+    document.addEventListener("keydown", handleFloorKeydown);
+    document.addEventListener("keyup", handleFloorKeyup);
+    document.addEventListener("error", handleGameAssetError, true);
+    initializePhaserFloor();
+    applyFloorLanguage();
     refreshUI();
     addLog("SYSTEM", "Night Shift 콘솔 준비 완료 - START SHIFT 대기");
     startShiftHeartbeat();
