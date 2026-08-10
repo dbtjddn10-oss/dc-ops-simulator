@@ -8,6 +8,8 @@
 
 **Live Demo:** [https://d35scspd118fhn.cloudfront.net](https://d35scspd118fhn.cloudfront.net)
 
+**Live Preview — v1.1 Floor Mode:** [https://dbtjddn10-oss.github.io/dc-ops-simulator/](https://dbtjddn10-oss.github.io/dc-ops-simulator/)
+
 ## 프로젝트 개요 (Overview)
 
 데이터센터 운영에서 사용하는 Incident Response 흐름을 짧고 반복 가능한 브라우저 경험으로 구성했습니다.
